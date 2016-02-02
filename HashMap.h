@@ -84,6 +84,9 @@ public:
   private:
     explicit hm_iterator(ContT *hm) : hm_(hm) { advance_past_empty(); }
     explicit hm_iterator(ContT *hm, size_type idx) : hm_(hm), idx_(idx) {}
+    template <typename OtherContT, typename OtherIterVal>
+    hm_iterator(const hm_iterator<OtherContT, OtherIterVal> &other)
+        : hm_(other.hm_), idx_(other.idx_) {}
 
     void advance_past_empty() {
       while (idx_ < hm_->buckets_.size() &&
@@ -132,9 +135,8 @@ public:
 
   // Modifiers
   void clear() {
-    for (auto it = begin(); it != end(); ++it) {
-      it->first = empty_key_;
-    }
+    HashMap other(bucket_count(), empty_key_);
+    swap(other);
   }
 
   std::pair<iterator, bool> insert(const value_type &value) {
@@ -193,15 +195,17 @@ public:
   }
 
   // Lookup
-  reference at(key_type key) {
+  mapped_type &at(key_type key) {
     iterator it = find(key);
     if (it != end()) {
       return it->second;
     }
-    throw std::out_of_range();
+    throw std::out_of_range("key not found");
   }
 
-  const_reference at(key_type key) const { return at(key); }
+  const mapped_type &at(key_type key) const { return at(key); }
+
+  mapped_type &operator[](key_type key) { return emplace(key).first->second; }
 
   size_type count(key_type key) const { return find(key) == end() ? 0 : 1; }
 
@@ -232,8 +236,7 @@ public:
 
   void reserve(size_type count) {
     if (count * 2 > buckets_.size()) {
-      HashMap other(*this, buckets_.size() * 2);
-      swap(other);
+      rehash(count * 2);
     }
   }
 
