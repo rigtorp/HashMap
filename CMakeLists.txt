@@ -1,11 +1,11 @@
 cmake_minimum_required(VERSION 3.2)    
 project(HashMap)
 
+set(CMAKE_EXPORT_COMPILE_COMMANDS "true")
 set(CMAKE_CXX_FLAGS "-std=c++14 -Wall")
-set(CMAKE_CXX_FLAGS_RELEASE "-O3")
 
-add_executable(benchmark benchmark.cpp)
-add_executable(tests tests.cpp)
+add_executable(HashMapBenchmark HashMapBenchmark.cpp)
+add_executable(HashMapTest HashMapTest.cpp)
 
 enable_testing()
-add_test(test tests)
+add_test(HashMapTest HashMapTest)

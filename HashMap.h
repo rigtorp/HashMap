@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2015 Erik Rigtorp <erik@rigtorp.se>
+Copyright (c) 2016 Erik Rigtorp <erik@rigtorp.se>
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -48,6 +48,8 @@ Disadvantages:
 #include <limits>
 #include <stdexcept>
 #include <vector>
+
+namespace rigtorp {
 
 template <typename Key, typename T, typename Hash = std::hash<Key>>
 class HashMap {
@@ -263,3 +265,4 @@ private:
   buckets buckets_;
   size_t size_ = 0;
 };
+}
