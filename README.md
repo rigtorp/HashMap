@@ -1,5 +1,7 @@
 # HashMap.h
 
+[![Build Status](https://travis-ci.org/rigtorp/HashMap.svg?branch=master)](https://travis-ci.org/rigtorp/HashMap)
+
 A hash table mostly compatible with the C++11 *std::unordered_map*
 interface, but with much higher performance.
 
