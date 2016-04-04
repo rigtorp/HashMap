@@ -202,7 +202,7 @@ public:
     if (it != end()) {
       return it->second;
     }
-    throw std::out_of_range("key not found");
+    throw std::out_of_range("HashMap::at");
   }
 
   const mapped_type &at(key_type key) const { return at(key); }
