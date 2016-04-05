@@ -27,3 +27,13 @@ HashMap:                77 ns/iter
 google::dense_hash_map: 122 ns/iter
 std::unordered_map:     220 ns/iter
 ```
+
+## About
+
+This project was created by **Erik Rigtorp**:
+
+* [Email](mailto:erik@rigtorp.se)
+* [Website](http://rigtorp.se)
+* [GitHub](https://github.com/rigtorp)
+* [Twitter](https://twitter.com/rigtorp)
+* [LinkedIn](https://www.linkedin.com/in/rigtorp)
