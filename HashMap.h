@@ -157,9 +157,9 @@ public:
         buckets_[idx].second = mapped_type(std::forward<Args>(args)...);
         buckets_[idx].first = key;
         size_++;
-        return std::make_pair(iterator(this, idx), true);
+        return {iterator(this, idx), true};
       } else if (buckets_[idx].first == key) {
-        return std::make_pair(iterator(this, idx), false);
+        return {iterator(this, idx), false};
       }
     }
   };
@@ -246,17 +246,17 @@ public:
   hasher hash_function() const { return hasher(); }
 
 private:
-  inline size_t key_to_idx(key_type key) {
+  size_t key_to_idx(key_type key) const {
     const size_t mask = buckets_.size() - 1;
     return hasher()(key) & mask;
   }
 
-  inline size_t probe_next(size_t idx) {
+  size_t probe_next(size_t idx) const {
     const size_t mask = buckets_.size() - 1;
     return (idx + 1) & mask;
   }
 
-  inline size_t diff(size_t a, size_t b) {
+  size_t diff(size_t a, size_t b) const {
     const size_t mask = buckets_.size() - 1;
     return (buckets_.size() + (a - b)) & mask;
   }
