@@ -8,28 +8,42 @@ interface, but with much higher performance for many workloads.
 
 ## Implementation
 
-This hash table uses open addressing with linear probing and backshift
-deletion. Open addressing and linear probing minimizes memory
-allocations and achives high cache effiency. Backshift deletion keeps
-performance high for delete heavy workloads by not clobbering the hash
-table with tombestones.
+This hash table uses [open addressing][1] with [linear probing][2] and
+backshift deletion. Open addressing and linear probing minimizes
+memory allocations and achives high cache effiency. Backshift deletion
+keeps performance high for delete heavy workloads by not clobbering
+the hash table with [tombestones][3].
 
-Please note that this hash table currently only works with POD-types,
-destructors are not called on *erase()*. It's not too hard to make it
-work with complex types.
+References:
 
-## Benchmark
+1. Wikipedia. ["Open addressing"][1]
+2. Wikipedia. ["Linear probing"][2]
+3. Wikipedia. ["Lazy deletion"][3]
 
-The benchmark first inserts 1M random entries in the table and then
-removes the last inserted item and inserts a new random entry 1
-billion times. This is benchmark is designed to simulate a delete
-heavy workload.
+[1]: https://en.wikipedia.org/wiki/Open_addressing "Open addressing"
+[2]: https://en.wikipedia.org/wiki/Linear_probing "Linear probing"
+[3]: https://en.wikipedia.org/wiki/Lazy_deletion "Lazy deletion"
 
-| Implementation         | ns/iter |
-| ---------------------- | -------:|
-| HashMap                |      77 |
-| google::dense_hash_map |     122 |
-| std::unordered_map     |     220 |
+## Usage
+
+`HashMap` is mostly compatible with the C++11 container interface. The
+main differences are:
+
+* A key value to represent the empty key is required.
+* `T` needs to be default constructible.
+* Iterators are invalidated on all modifying operations.
+* It's invalid to perform any operations with the empty key.
+* Destructors are not called on `erase`.
+
+```cpp
+HashMap(size_type bucket_count, key_type empty_key);
+```
+
+Construct a `HashMap` with `bucket_count` buckets and `empty_key` as
+the empty key.
+
+The rest of the member functions are implemented as for
+[`std::unordered_map`](http://en.cppreference.com/w/cpp/container/unordered_map).
 
 ## Example
 
@@ -47,6 +61,19 @@ for (const auto &e : hm) {
 // Erase entry
 hm.erase(1);
 ```
+
+## Benchmark
+
+The benchmark first inserts 1M random entries in the table and then
+removes the last inserted item and inserts a new random entry 1
+billion times. This is benchmark is designed to simulate a delete
+heavy workload.
+
+| Implementation         | ns/iter |
+| ---------------------- | -------:|
+| HashMap                |      77 |
+| google::dense_hash_map |     122 |
+| std::unordered_map     |     220 |
 
 ## About
 
