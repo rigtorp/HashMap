@@ -14,12 +14,6 @@ memory allocations and achives high cache effiency. Backshift deletion
 keeps performance high for delete heavy workloads by not clobbering
 the hash table with [tombestones][3].
 
-References:
-
-1. Wikipedia. ["Open addressing"][1]
-2. Wikipedia. ["Linear probing"][2]
-3. Wikipedia. ["Lazy deletion"][3]
-
 [1]: https://en.wikipedia.org/wiki/Open_addressing "Open addressing"
 [2]: https://en.wikipedia.org/wiki/Linear_probing "Linear probing"
 [3]: https://en.wikipedia.org/wiki/Lazy_deletion "Lazy deletion"
@@ -30,7 +24,7 @@ References:
 main differences are:
 
 * A key value to represent the empty key is required.
-* `T` needs to be default constructible.
+* `Key` and `T` needs to be default constructible.
 * Iterators are invalidated on all modifying operations.
 * It's invalid to perform any operations with the empty key.
 * Destructors are not called on `erase`.
