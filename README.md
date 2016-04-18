@@ -23,18 +23,18 @@ the hash table with [tombestones][3].
 `HashMap` is mostly compatible with the C++11 container interface. The
 main differences are:
 
-* A key value to represent the empty key is required.
-* `Key` and `T` needs to be default constructible.
-* Iterators are invalidated on all modifying operations.
-* It's invalid to perform any operations with the empty key.
-* Destructors are not called on `erase`.
+- A key value to represent the empty key is required.
+- `Key` and `T` needs to be default constructible.
+- Iterators are invalidated on all modifying operations.
+- It's invalid to perform any operations with the empty key.
+- Destructors are not called on `erase`.
 
-```cpp
-HashMap(size_type bucket_count, key_type empty_key);
-```
+Member functions:
 
-Construct a `HashMap` with `bucket_count` buckets and `empty_key` as
-the empty key.
+- `HashMap(size_type bucket_count, key_type empty_key);`
+
+  Construct a `HashMap` with `bucket_count` buckets and `empty_key` as
+  the empty key.
 
 The rest of the member functions are implemented as for
 [`std::unordered_map`](http://en.cppreference.com/w/cpp/container/unordered_map).
