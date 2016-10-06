@@ -31,85 +31,50 @@ using namespace rigtorp;
 using namespace std::chrono;
 
 int main(int argc, char *argv[]) {
-  constexpr size_t count = 1000000;
-  constexpr size_t iters = 1000000000;
+  (void)argc, (void)argv;
 
-  {
-    HashMap<int, int> hm(count, 0);
+  constexpr size_t count = 1000;
+  constexpr size_t iters = 100000000;
+
+  auto b = [count, iters](const char *n, auto &m) {
     std::mt19937 mt;
     std::uniform_int_distribution<int> ud(2, count);
 
-    int val;
     for (size_t i = 0; i < count; ++i) {
-      val = ud(mt);
-      hm.emplace(val, val);
+      const int val = ud(mt);
+      m.insert({val, val});
     }
 
     auto start = high_resolution_clock::now();
     for (size_t i = 0; i < iters; ++i) {
-      hm.erase(val);
-      val = ud(mt);
-      hm.emplace(val, val);
+      const int val = ud(mt);
+      m.erase(val);
+      const int val2 = ud(mt);
+      m.insert({val2, val2});
     }
     auto stop = high_resolution_clock::now();
     auto duration = stop - start;
 
-    std::cout << "HashMap: "
+    std::cout << n << ": "
               << duration_cast<nanoseconds>(duration).count() / iters
               << " ns/iter" << std::endl;
+  };
+
+  {
+    HashMap<int, int> hm(count, 0);
+    b("HashMap", hm);
   }
 
   {
     google::dense_hash_map<int, int> hm(count);
     hm.set_empty_key(0);
     hm.set_deleted_key(1);
-
-    std::mt19937 mt;
-    std::uniform_int_distribution<int> ud(2, count);
-
-    int val;
-    for (size_t i = 0; i < count; ++i) {
-      val = ud(mt);
-      hm.insert(std::make_pair(val, val));
-    }
-
-    auto start = high_resolution_clock::now();
-    for (size_t i = 0; i < iters; ++i) {
-      hm.erase(val);
-      val = ud(mt);
-      hm.insert(std::make_pair(val, val));
-    }
-    auto stop = high_resolution_clock::now();
-    auto duration = stop - start;
-
-    std::cout << "google::dense_hash_map: "
-              << duration_cast<nanoseconds>(duration).count() / iters
-              << " ns/iter" << std::endl;
+    b("google::dense_hash_map", hm);
   }
 
   {
     std::unordered_map<int, int> hm(count);
-    std::mt19937 mt;
-    std::uniform_int_distribution<int> ud(2, count);
-
-    int val;
-    for (size_t i = 0; i < count; ++i) {
-      val = ud(mt);
-      hm.emplace(val, val);
-    }
-
-    auto start = high_resolution_clock::now();
-    for (size_t i = 0; i < iters; ++i) {
-      hm.erase(val);
-      val = ud(mt);
-      hm.emplace(val, val);
-    }
-    auto stop = high_resolution_clock::now();
-    auto duration = stop - start;
-
-    std::cout << "std::unordered_map: "
-              << duration_cast<nanoseconds>(duration).count() / iters
-              << " ns/iter" << std::endl;
+    b("std::unordered_map", hm);
   }
 
   return 0;
