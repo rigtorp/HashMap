@@ -175,6 +175,49 @@ int main(int argc, char *argv[]) {
         "");
   }
 
+  // Constructors
+  {
+    // HashMap(const HashMap&)
+    HashMap<int, int> hm(16, 0);
+    hm[1] = 1;
+    HashMap<int, int> hm2(hm);
+    EXPECT(!hm2.empty());
+    EXPECT(hm2.size() == 1);
+    EXPECT(hm2[1] == 1);
+  }
+
+  {
+    // HashMap(HashMap&&)
+    HashMap<int, int> hm(16, 0);
+    hm[1] = 1;
+    HashMap<int, int> hm2(std::move(hm));
+    EXPECT(!hm2.empty());
+    EXPECT(hm2.size() == 1);
+    EXPECT(hm2[1] == 1);
+  }
+
+  {
+    // operator=(const HashMap&)
+    HashMap<int, int> hm(16, 0);
+    hm[1] = 1;
+    HashMap<int, int> hm2(16, 0);
+    hm2.operator=(hm);
+    EXPECT(!hm2.empty());
+    EXPECT(hm2.size() == 1);
+    EXPECT(hm2[1] == 1);
+  }
+
+  {
+    // operator=(HashMap&&)
+    HashMap<int, int> hm(16, 0);
+    hm[1] = 1;
+    HashMap<int, int> hm2(16, 0);
+    hm2.operator=(std::move(hm));
+    EXPECT(!hm2.empty());
+    EXPECT(hm2.size() == 1);
+    EXPECT(hm2[1] == 1);
+  }
+
   // Iterators
   {
     HashMap<int, int> hm(16, 0);
