@@ -21,6 +21,7 @@ SOFTWARE.
  */
 
 #include "HashMap.h"
+#include <array>
 
 using namespace rigtorp;
 
@@ -227,6 +228,19 @@ int main(int argc, char *argv[]) {
     EXPECT(hm.cbegin() == hm.cend());
     EXPECT(hm.cbegin() == chm.begin());
     EXPECT(hm.cend() == chm.end());
+
+    for (int i = 1; i < 100; ++i) {
+      hm[i] = i;
+    }
+
+    std::array<bool, 100> visited = {};
+    for (auto it = hm.begin(); it != hm.end(); ++it) {
+      visited[it->first] = true;
+    }
+
+    for (int i = 1; i < 100; ++i) {
+      EXPECT(visited[i]);
+    }
   }
 
   // Capacity
