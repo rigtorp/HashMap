@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2016 Erik Rigtorp <erik@rigtorp.se>
+Copyright (c) 2017 Erik Rigtorp <erik@rigtorp.se>
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -43,6 +43,7 @@ Disadvantages:
 
 #pragma once
 
+#include <cassert>
 #include <cstddef>
 #include <cstdint>
 #include <limits>
@@ -233,6 +234,7 @@ public:
 private:
   template <typename K, typename... Args>
   std::pair<iterator, bool> emplace_impl(const K &key, Args &&... args) {
+    assert(!key_equal()(empty_key_, key) && "empty key shouldn't be used");
     reserve(size_ + 1);
     for (size_t idx = key_to_idx(key);; idx = probe_next(idx)) {
       if (key_equal()(buckets_[idx].first, empty_key_)) {
@@ -289,6 +291,7 @@ private:
   }
 
   template <typename K> iterator find_impl(const K &key) {
+    assert(!key_equal()(empty_key_, key) && "empty key shouldn't be used");
     for (size_t idx = key_to_idx(key);; idx = probe_next(idx)) {
       if (key_equal()(buckets_[idx].first, key)) {
         return iterator(this, idx);
@@ -318,6 +321,7 @@ private:
     return (buckets_.size() + (a - b)) & mask;
   }
 
+private:
   key_type empty_key_;
   buckets buckets_;
   size_t size_ = 0;
