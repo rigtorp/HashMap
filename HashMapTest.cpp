@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2016 Erik Rigtorp <erik@rigtorp.se>
+Copyright (c) 2017 Erik Rigtorp <erik@rigtorp.se>
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -223,11 +223,22 @@ int main(int argc, char *argv[]) {
   {
     HashMap<int, int> hm(16, 0);
     const auto &chm = hm;
+
     EXPECT(hm.begin() == hm.end());
     EXPECT(chm.begin() == chm.end());
     EXPECT(hm.cbegin() == hm.cend());
     EXPECT(hm.cbegin() == chm.begin());
     EXPECT(hm.cend() == chm.end());
+
+    EXPECT(!(hm.begin() != hm.end()));
+    EXPECT(!(chm.begin() != chm.end()));
+    EXPECT(!(hm.cbegin() != hm.cend()));
+    EXPECT(!(hm.cbegin() != chm.begin()));
+    EXPECT(!(hm.cend() != chm.end()));
+
+    const auto cit = hm.begin();
+    EXPECT(cit == hm.end());
+    EXPECT(!(cit != hm.end()));
 
     for (int i = 1; i < 100; ++i) {
       hm[i] = i;

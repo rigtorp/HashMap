@@ -75,7 +75,9 @@ public:
     bool operator==(const hm_iterator &other) const {
       return other.hm_ == hm_ && other.idx_ == idx_;
     }
-    bool operator!=(const hm_iterator &other) { return !(other == *this); }
+    bool operator!=(const hm_iterator &other) const {
+      return !(other == *this);
+    }
 
     hm_iterator &operator++() {
       ++idx_;
