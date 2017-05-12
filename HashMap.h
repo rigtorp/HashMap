@@ -67,6 +67,7 @@ public:
   using buckets = std::vector<value_type>;
 
   template <typename ContT, typename IterVal> struct hm_iterator {
+    using difference_type = std::ptrdiff_t;
     using value_type = IterVal;
     using pointer = value_type *;
     using reference = value_type &;

@@ -21,6 +21,7 @@ SOFTWARE.
  */
 
 #include "HashMap.h"
+#include <algorithm>
 #include <array>
 
 using namespace rigtorp;
@@ -252,6 +253,10 @@ int main(int argc, char *argv[]) {
     for (int i = 1; i < 100; ++i) {
       EXPECT(visited[i]);
     }
+
+    // Test for iterator traits
+    EXPECT(std::all_of(hm.begin(), hm.end(),
+                       [](const auto &item) { return item.second > 0; }));
   }
 
   // Capacity
