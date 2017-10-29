@@ -21,6 +21,7 @@ SOFTWARE.
  */
 
 #include "HashMap.h"
+#include "HashMap2.h"
 #include <chrono>
 #include <google/dense_hash_map>
 #include <iostream>
@@ -33,8 +34,8 @@ using namespace std::chrono;
 int main(int argc, char *argv[]) {
   (void)argc, (void)argv;
 
-  constexpr size_t count = 1000;
-  constexpr size_t iters = 100000000;
+  constexpr size_t count = 10000;
+  constexpr size_t iters = 10000000;
 
   auto b = [count, iters](const char *n, auto &m) {
     std::mt19937 mt;
@@ -63,6 +64,11 @@ int main(int argc, char *argv[]) {
   {
     HashMap<int, int> hm(count, 0);
     b("HashMap", hm);
+  }
+
+  {
+    HashMap2<int, int> hm(count);
+    b("HashMap2", hm);
   }
 
   {

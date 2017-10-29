@@ -21,7 +21,7 @@ SOFTWARE.
  */
 
 /*
-HashMap
+HashMap2
 
 A high performance hash map. Uses open addressing with linear
 probing.
@@ -43,6 +43,7 @@ Disadvantages:
 
 #pragma once
 
+#include "emmintrin.h"
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
@@ -54,7 +55,7 @@ namespace rigtorp {
 
 template <typename Key, typename T, typename Hash = std::hash<Key>,
           typename KeyEqual = std::equal_to<void>>
-class HashMap {
+class HashMap2 {
 public:
   using key_type = Key;
   using mapped_type = T;
@@ -97,8 +98,7 @@ public:
         : hm_(other.hm_), idx_(other.idx_) {}
 
     void advance_past_empty() {
-      while (idx_ < hm_->buckets_.size() &&
-             key_equal()(hm_->buckets_[idx_].first, hm_->empty_key_)) {
+      while (idx_ < hm_->buckets_.size() && hm_->ctrl_[idx_] & -128) {
         ++idx_;
       }
     }
@@ -108,20 +108,21 @@ public:
     friend ContT;
   };
 
-  using iterator = hm_iterator<HashMap, value_type>;
-  using const_iterator = hm_iterator<const HashMap, const value_type>;
+  using iterator = hm_iterator<HashMap2, value_type>;
+  using const_iterator = hm_iterator<const HashMap2, const value_type>;
 
 public:
-  HashMap(size_type bucket_count, key_type empty_key) : empty_key_(empty_key) {
+  explicit HashMap2(size_type bucket_count) {
     size_t pow2 = 1;
     while (pow2 < bucket_count) {
       pow2 <<= 1;
     }
-    buckets_.resize(pow2, std::make_pair(empty_key_, T()));
+    buckets_.resize(pow2);
+    ctrl_.resize(pow2, -128);
   }
 
-  HashMap(const HashMap &other, size_type bucket_count)
-      : HashMap(bucket_count, other.empty_key_) {
+  HashMap2(const HashMap2 &other, size_type bucket_count)
+      : HashMap2(bucket_count) {
     for (auto it = other.begin(); it != other.end(); ++it) {
       insert(*it);
     }
@@ -141,15 +142,17 @@ public:
   const_iterator cend() const { return const_iterator(this, buckets_.size()); }
 
   // Capacity
-  bool empty() const { return size() == 0; }
+  bool empty() const noexcept { return size() == 0; }
 
-  size_type size() const { return size_; }
+  size_type size() const noexcept { return size_; }
 
-  size_type max_size() const { return std::numeric_limits<size_type>::max(); }
+  size_type max_size() const noexcept {
+    return std::numeric_limits<size_type>::max();
+  }
 
   // Modifiers
   void clear() {
-    HashMap other(bucket_count(), empty_key_);
+    HashMap2 other(bucket_count());
     swap(other);
   }
 
@@ -172,10 +175,10 @@ public:
 
   template <typename K> size_type erase(const K &x) { return erase_impl(x); }
 
-  void swap(HashMap &other) {
+  void swap(HashMap2 &other) {
     std::swap(buckets_, other.buckets_);
+    std::swap(ctrl_, other.ctrl_);
     std::swap(size_, other.size_);
-    std::swap(empty_key_, other.empty_key_);
   }
 
   // Lookup
@@ -193,19 +196,25 @@ public:
     return emplace_impl(key).first->second;
   }
 
-  size_type count(const key_type &key) const { return count_impl(key); }
+  size_type count(const key_type &key) const noexcept {
+    return count_impl(key);
+  }
 
-  template <typename K> size_type count(const K &x) const {
+  template <typename K> size_type count(const K &x) const noexcept {
     return count_impl(x);
   }
 
-  iterator find(const key_type &key) { return find_impl(key); }
+  iterator find(const key_type &key) noexcept { return find_impl(key); }
 
-  template <typename K> iterator find(const K &x) { return find_impl(x); }
+  template <typename K> iterator find(const K &x) noexcept {
+    return find_impl(x);
+  }
 
-  const_iterator find(const key_type &key) const { return find_impl(key); }
+  const_iterator find(const key_type &key) const noexcept {
+    return find_impl(key);
+  }
 
-  template <typename K> const_iterator find(const K &x) const {
+  template <typename K> const_iterator find(const K &x) const noexcept {
     return find_impl(x);
   }
 
@@ -223,12 +232,12 @@ public:
 
   void rehash(size_type count) {
     count = std::max(count, size() * 2);
-    HashMap other(*this, count);
+    HashMap2 other(*this, count);
     swap(other);
   }
 
   void reserve(size_type count) {
-    if (count * 2 > buckets_.size()) {
+    if (count * 8 > buckets_.size() * 7) {
       rehash(count * 2);
     }
   }
@@ -241,35 +250,49 @@ public:
 private:
   template <typename K, typename... Args>
   std::pair<iterator, bool> emplace_impl(const K &key, Args &&... args) {
-    assert(!key_equal()(empty_key_, key) && "empty key shouldn't be used");
     reserve(size_ + 1);
-    for (size_t idx = key_to_idx(key);; idx = probe_next(idx)) {
-      if (key_equal()(buckets_[idx].first, empty_key_)) {
+    const auto hash = hasher()(key);
+    auto group = hash >> 7 & (buckets_.size() / 16 - 1);
+    for (;;) {
+      const auto mask = _mm_set1_epi8(hash & 0x7F);
+      const auto ctrl = _mm_loadu_si128((const __m128i_u *)&ctrl_[group * 16]);
+      auto bitset = _mm_movemask_epi8(_mm_cmpeq_epi8(mask, ctrl));
+
+      while (bitset) {
+        int i = __builtin_ctz(bitset);
+        if (key_equal()(buckets_[group * 16 + i].first, key)) {
+          return {iterator(this, group * 16 + i), false};
+        }
+        bitset &= ~(1 << i);
+      }
+
+      auto empty = _mm_movemask_epi8(ctrl);
+      if (empty) {
+        int i = __builtin_ctz(empty);
+        const auto idx = group * 16 + i;
+        ctrl_[idx] = hash & 0x7F;
         buckets_[idx].second = mapped_type(std::forward<Args>(args)...);
         buckets_[idx].first = key;
         size_++;
         return {iterator(this, idx), true};
-      } else if (key_equal()(buckets_[idx].first, key)) {
-        return {iterator(this, idx), false};
       }
+
+      group = (group + 1) & (buckets_.size() / 16 - 1);
     }
   }
 
   void erase_impl(iterator it) {
     size_t bucket = it.idx_;
-    for (size_t idx = probe_next(bucket);; idx = probe_next(idx)) {
-      if (key_equal()(buckets_[idx].first, empty_key_)) {
-        buckets_[bucket].first = empty_key_;
-        size_--;
-        return;
-      }
-      size_t ideal = key_to_idx(buckets_[idx].first);
-      if (diff(bucket, ideal) < diff(idx, ideal)) {
-        // swap, bucket is closer to ideal than idx
-        buckets_[bucket] = buckets_[idx];
-        bucket = idx;
-      }
+    const auto group = bucket / 16;
+    const auto mask2 = _mm_set1_epi8(-128);
+    const auto ctrl = _mm_loadu_si128((const __m128i_u *)&ctrl_[group * 16]);
+    const auto empty = _mm_movemask_epi8(_mm_cmpeq_epi8(mask2, ctrl));
+    if (empty) {
+      ctrl_[bucket] = -128;
+    } else {
+      ctrl_[bucket] = -1;
     }
+    size_--;
   }
 
   template <typename K> size_type erase_impl(const K &key) {
@@ -286,36 +309,54 @@ private:
     if (it != end()) {
       return it->second;
     }
-    throw std::out_of_range("HashMap::at");
+    throw std::out_of_range("HashMap2::at");
   }
 
   template <typename K> const mapped_type &at_impl(const K &key) const {
-    return const_cast<HashMap *>(this)->at_impl(key);
+    return const_cast<HashMap2 *>(this)->at_impl(key);
   }
 
-  template <typename K> size_t count_impl(const K &key) const {
+  template <typename K> size_t count_impl(const K &key) const noexcept {
     return find_impl(key) == end() ? 0 : 1;
   }
 
-  template <typename K> iterator find_impl(const K &key) {
-    assert(!key_equal()(empty_key_, key) && "empty key shouldn't be used");
-    for (size_t idx = key_to_idx(key);; idx = probe_next(idx)) {
-      if (key_equal()(buckets_[idx].first, key)) {
-        return iterator(this, idx);
+  template <typename K> iterator find_impl(const K &key) noexcept {
+    const auto hash = hasher()(key);
+    auto group = group_idx(hash);
+    for (;;) {
+      const auto mask = _mm_set1_epi8(hash & 0x7F);
+      const auto ctrl = _mm_loadu_si128((const __m128i_u *)&ctrl_[group * 16]);
+      auto bitset = _mm_movemask_epi8(_mm_cmpeq_epi8(mask, ctrl));
+
+      while (bitset) {
+        int i = __builtin_ctz(bitset);
+        if (key_equal()(buckets_[group * 16 + i].first, key)) {
+          return iterator(this, group * 16 + i);
+        }
+        bitset &= ~(1 << i);
       }
-      if (key_equal()(buckets_[idx].first, empty_key_)) {
+
+      const auto mask2 = _mm_set1_epi8(-128);
+      const auto empty = _mm_movemask_epi8(_mm_cmpeq_epi8(mask2, ctrl));
+      if (empty) {
         return end();
       }
+
+      group = (group + 1) & (buckets_.size() / 16 - 1);
     }
   }
 
   template <typename K> const_iterator find_impl(const K &key) const {
-    return const_cast<HashMap *>(this)->find_impl(key);
+    return const_cast<HashMap2 *>(this)->find_impl(key);
   }
 
   template <typename K> size_t key_to_idx(const K &key) const {
     const size_t mask = buckets_.size() - 1;
     return hasher()(key) & mask;
+  }
+
+  size_t group_idx(const size_t hash) {
+    return hash >> 7 & (buckets_.size() / 16 - 1);
   }
 
   size_t probe_next(size_t idx) const {
@@ -329,8 +370,8 @@ private:
   }
 
 private:
-  key_type empty_key_;
   buckets buckets_;
+  std::vector<int8_t> ctrl_;
   size_t size_ = 0;
 };
 }
