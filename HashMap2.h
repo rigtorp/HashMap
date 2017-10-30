@@ -44,6 +44,7 @@ Disadvantages:
 #pragma once
 
 #include "emmintrin.h"
+#include "immintrin.h"
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
@@ -52,6 +53,22 @@ Disadvantages:
 #include <vector>
 
 namespace rigtorp {
+
+/*
+struct Hash {
+template <typename T>
+std::enable_if_t<std::is_integral<T>::value, uint64_t> operator()(T v) const
+  noexcept {
+uint64_t h = static_cast<uint64_t>(v);
+h ^= h >> 33;
+h *= 0xff51afd7ed558ccd;
+h ^= h >> 33;
+h *= 0xc4ceb9fe1a85ec53;
+h ^= h >> 33;
+return h;
+}
+};
+*/
 
 template <typename Key, typename T, typename Hash = std::hash<Key>,
           typename KeyEqual = std::equal_to<void>>
@@ -112,7 +129,10 @@ public:
   using const_iterator = hm_iterator<const HashMap2, const value_type>;
 
 public:
+  HashMap2() : HashMap2(0) {}
+
   explicit HashMap2(size_type bucket_count) {
+    bucket_count = std::max<size_t>(bucket_count, 32);
     size_t pow2 = 1;
     while (pow2 < bucket_count) {
       pow2 <<= 1;
@@ -152,7 +172,7 @@ public:
 
   // Modifiers
   void clear() {
-    HashMap2 other(bucket_count());
+    HashMap2 other;
     swap(other);
   }
 
@@ -227,18 +247,22 @@ public:
 
   // Hash policy
   float load_factor() const noexcept {
-    return static_cast<float>(size()) / bucket_count();
+    return static_cast<float>(size() + tombestones_) / bucket_count();
   }
 
+  float max_load_factor() const noexcept { return static_cast<float>(7) / 8; }
+
+  // void max_load_factor(float ml) {}
+
   void rehash(size_type count) {
-    count = std::max(count, size() * 2);
+    count = std::max(count, (size() * 7) / 8);
     HashMap2 other(*this, count);
     swap(other);
   }
 
   void reserve(size_type count) {
-    if (count * 8 > buckets_.size() * 7) {
-      rehash(count * 2);
+    if ((count + tombestones_) * 8 > buckets_.size() * 7) {
+      rehash(count);
     }
   }
 
@@ -252,6 +276,37 @@ private:
   std::pair<iterator, bool> emplace_impl(const K &key, Args &&... args) {
     reserve(size_ + 1);
     const auto hash = hasher()(key);
+#ifdef __AVX2__
+#warning "using avx2"
+    auto group = hash >> 7 & (buckets_.size() / 32 - 1);
+    for (;;) {
+      const auto mask = _mm256_set1_epi8(hash & 0x7F);
+      const auto ctrl =
+          _mm256_loadu_si256((const __m256i_u *)&ctrl_[group * 32]);
+      auto bitset = _mm256_movemask_epi8(_mm256_cmpeq_epi8(mask, ctrl));
+
+      while (bitset) {
+        int i = __builtin_ctz(bitset);
+        if (key_equal()(buckets_[group * 32 + i].first, key)) {
+          return {iterator(this, group * 32 + i), false};
+        }
+        bitset &= ~(1 << i);
+      }
+
+      auto empty = _mm256_movemask_epi8(ctrl);
+      if (empty) {
+        int i = __builtin_ctz(empty);
+        const auto idx = group * 32 + i;
+        ctrl_[idx] = hash & 0x7F;
+        buckets_[idx].second = mapped_type(std::forward<Args>(args)...);
+        buckets_[idx].first = key;
+        size_++;
+        return {iterator(this, idx), true};
+      }
+
+      group = (group + 1) & (buckets_.size() / 32 - 1);
+    }
+#elif __AVX__
     auto group = hash >> 7 & (buckets_.size() / 16 - 1);
     for (;;) {
       const auto mask = _mm_set1_epi8(hash & 0x7F);
@@ -279,18 +334,32 @@ private:
 
       group = (group + 1) & (buckets_.size() / 16 - 1);
     }
+#else
+#error "cannot vecotirze"
+#endif
   }
 
   void erase_impl(iterator it) {
     size_t bucket = it.idx_;
+#ifdef __AVX2__
+#warning "using avx2"
+    const auto group = bucket / 32;
+    const auto mask2 = _mm256_set1_epi8(-128);
+    const auto ctrl = _mm256_loadu_si256((const __m256i_u *)&ctrl_[group * 32]);
+    const auto empty = _mm256_movemask_epi8(_mm256_cmpeq_epi8(mask2, ctrl));
+#elif __AVX__
     const auto group = bucket / 16;
     const auto mask2 = _mm_set1_epi8(-128);
     const auto ctrl = _mm_loadu_si128((const __m128i_u *)&ctrl_[group * 16]);
     const auto empty = _mm_movemask_epi8(_mm_cmpeq_epi8(mask2, ctrl));
+#else
+#error "cannot vectorize"
+#endif
     if (empty) {
       ctrl_[bucket] = -128;
     } else {
       ctrl_[bucket] = -1;
+      tombestones_++;
     }
     size_--;
   }
@@ -320,8 +389,37 @@ private:
     return find_impl(key) == end() ? 0 : 1;
   }
 
-  template <typename K> iterator find_impl(const K &key) noexcept {
+  template <typename K>
+  iterator find_impl(const K &key) noexcept(noexcept(hasher()(key))) {
     const auto hash = hasher()(key);
+#ifdef __AVX2__
+#warning "using avx2"
+    auto group = hash >> 7 & (buckets_.size() / 32 - 1);
+    for (;;) {
+      const auto mask = _mm256_set1_epi8(hash & 0x7F);
+      const auto ctrl =
+          _mm256_loadu_si256((const __m256i_u *)&ctrl_[group * 32]);
+      auto bitset = _mm256_movemask_epi8(_mm256_cmpeq_epi8(mask, ctrl));
+
+      while (bitset) {
+        int i = __builtin_ctz(bitset);
+        if (key_equal()(buckets_[group * 32 + i].first, key)) {
+          return iterator(this, group * 32 + i);
+        }
+        bitset &= ~(1 << i);
+      }
+
+      const auto mask2 = _mm256_set1_epi8(-128);
+      const auto empty = _mm256_movemask_epi8(_mm256_cmpeq_epi8(mask2, ctrl));
+      if (empty) {
+        return end();
+      }
+
+      group = (group + 1) & (buckets_.size() / 32 - 1);
+    }
+#else
+#ifdef __AVX__
+#warning "using avx"
     auto group = group_idx(hash);
     for (;;) {
       const auto mask = _mm_set1_epi8(hash & 0x7F);
@@ -344,6 +442,10 @@ private:
 
       group = (group + 1) & (buckets_.size() / 16 - 1);
     }
+#else
+#error "cannot vectorize"
+#endif
+#endif
   }
 
   template <typename K> const_iterator find_impl(const K &key) const {
@@ -373,5 +475,6 @@ private:
   buckets buckets_;
   std::vector<int8_t> ctrl_;
   size_t size_ = 0;
+  size_t tombestones_ = 0;
 };
 }
