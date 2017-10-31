@@ -28,6 +28,8 @@ SOFTWARE.
 #include <random>
 #include <unordered_map>
 
+#include <benchmark/benchmark.h>
+
 using namespace rigtorp;
 using namespace std::chrono;
 
@@ -42,96 +44,36 @@ struct Hash {
   }
 };
 
-int main(int argc, char *argv[]) {
-  (void)argc, (void)argv;
-
-  constexpr size_t count = (1 << 19);
-  constexpr size_t iters = 1000;
-
-  using value = std::array<char, 8>;
-
-  volatile size_t out = 0;
-
-  auto b = [count, iters, &out](const char *n, auto &m) {
-    // std::mt19937 mt;
-    // std::uniform_int_distribution<int> ud(2, count);
-
-    for (size_t i = 0; i < count; ++i) {
-      const int val = i; // ud(mt);
-      m.insert({val, {}});
-    }
-
-    for (size_t i = 0; i < count; ++i) {
-      const int val = i; // ud(mt);
-      m.erase(val);
-    }
-
-    for (size_t i = 0; i < count; ++i) {
-      const int val = i; // ud(mt);
-      m.insert({val * 2, {}});
-    }
-
-    std::cout << m.load_factor() << std::endl;
-
-    auto start = high_resolution_clock::now();
-    for (size_t i = 0; i < iters; ++i) {
-      for (size_t j = 0; j < count; ++j) {
-        auto res = m.count(j);
-        out += res;
-        // if (!res) {
-        //  std::cout << "bajs " << j << std::endl;
-        // return;
-        //}
-      }
-      // const int val = ud(mt);
-      // m.erase(val);
-      // const int val2 = ud(mt);
-      // m.insert({val2, val2});
-    }
-    auto stop = high_resolution_clock::now();
-    auto duration = stop - start;
-
-    std::cout << n << ": "
-              << duration_cast<nanoseconds>(duration).count() / (iters * count)
-              << " ns/iter" << std::endl;
-  };
-
-  {
-    HashMap<int, value, Hash> hm(count, INT32_MIN);
-    b("HashMap", hm);
-    if (out != iters * count) {
-      std::cout << "error" << std::endl;
+static void BM_insert(benchmark::State &state) {
+  for (auto _ : state) {
+    state.PauseTiming();
+    HashMap<int, int, Hash> hm(0, INT32_MAX);
+    state.ResumeTiming();
+    for (int i = 0; i < state.range(0); ++i) {
+      hm.insert({i, i});
     }
   }
-
-  {
-    out = 0;
-    HashMap2<int, value, Hash> hm(count);
-    b("HashMap2", hm);
-    if (out != iters * count) {
-      std::cout << "error" << std::endl;
-    }
-  }
-
-  {
-    out = 0;
-    google::dense_hash_map<int, value, Hash> hm(count);
-    hm.set_empty_key(INT32_MAX);
-    hm.set_deleted_key(INT32_MIN + 1);
-    b("google::dense_hash_map", hm);
-    if (out != iters * count) {
-      std::cout << "error" << std::endl;
-    }
-  }
-
-  {
-    out = 0;
-    std::unordered_map<int, int, Hash> hm(count);
-    b("std::unordered_map", hm);
-    if (out != iters * count) {
-      std::cout << "error" << std::endl;
-    }
-  }
-
-  return 0;
+  state.SetItemsProcessed(state.range(0));
+  state.counters["FooRate"] =
+      benchmark::Counter(state.range(0), benchmark::Counter::kIsRate);
 }
+
+BENCHMARK(BM_insert)->RangeMultiplier(10)->Range(10, 100000000);
+
+static void BM_insert2(benchmark::State &state) {
+  for (auto _ : state) {
+    state.PauseTiming();
+    std::unordered_map<int, int, Hash> hm;
+    state.ResumeTiming();
+    for (int i = 0; i < state.range(0); ++i) {
+      hm.insert({i, i});
+    }
+  }
+  state.SetItemsProcessed(state.range(0));
+  state.counters["FooRate"] =
+      benchmark::Counter(state.range(0), benchmark::Counter::kIsRate);
+}
+
+BENCHMARK(BM_insert2)->RangeMultiplier(10)->Range(10, 100000000);
+
+BENCHMARK_MAIN()

@@ -261,8 +261,8 @@ public:
   }
 
   void reserve(size_type count) {
-    if ((count + tombestones_) * 8 > buckets_.size() * 7) {
-      rehash(count);
+    if ((count + tombestones_) * 8 > bucket_count() * 7) {
+      rehash(bucket_count() * 2);
     }
   }
 
