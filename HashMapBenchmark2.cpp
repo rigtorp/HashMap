@@ -44,36 +44,128 @@ struct Hash {
   }
 };
 
-static void BM_insert(benchmark::State &state) {
+constexpr size_t maxRange = 1000000;
+
+using value = std::array<char, 32>;
+
+template <class T> static void BM_LookupHit(benchmark::State &state) {
+  auto hm = T(state.range(0));
+  for (int i = 0; i < state.range(0); ++i) {
+    hm.insert({i, {}});
+  }
+  int i = 0;
   for (auto _ : state) {
-    state.PauseTiming();
-    HashMap<int, int, Hash> hm(0, INT32_MAX);
-    state.ResumeTiming();
-    for (int i = 0; i < state.range(0); ++i) {
-      hm.insert({i, i});
+    hm.find(i);
+    ++i;
+    if (i >= state.range(0)) {
+      i = 0;
     }
   }
-  state.SetItemsProcessed(state.range(0));
-  state.counters["FooRate"] =
-      benchmark::Counter(state.range(0), benchmark::Counter::kIsRate);
+  state.counters["LoadFactor"] = benchmark::Counter(hm.load_factor());
 }
 
-BENCHMARK(BM_insert)->RangeMultiplier(10)->Range(10, 100000000);
-
-static void BM_insert2(benchmark::State &state) {
+template <class T> static void BM_LookupHit2(benchmark::State &state) {
+  auto hm = T(state.range(0), INT32_MAX);
+  for (int i = 0; i < state.range(0); ++i) {
+    hm.insert({i, {}});
+  }
+  int i = 0;
   for (auto _ : state) {
-    state.PauseTiming();
-    std::unordered_map<int, int, Hash> hm;
-    state.ResumeTiming();
-    for (int i = 0; i < state.range(0); ++i) {
-      hm.insert({i, i});
+    hm.find(i);
+    ++i;
+    if (i >= state.range(0)) {
+      i = 0;
     }
   }
-  state.SetItemsProcessed(state.range(0));
-  state.counters["FooRate"] =
-      benchmark::Counter(state.range(0), benchmark::Counter::kIsRate);
+  state.counters["LoadFactor"] = benchmark::Counter(hm.load_factor());
 }
 
-BENCHMARK(BM_insert2)->RangeMultiplier(10)->Range(10, 100000000);
+BENCHMARK_TEMPLATE(BM_LookupHit, std::unordered_map<int, value, Hash>)
+    ->RangeMultiplier(10)
+    ->Range(10, maxRange);
+BENCHMARK_TEMPLATE(BM_LookupHit, HashMap2<int, value, Hash>)
+    ->RangeMultiplier(10)
+    ->Range(10, maxRange);
+BENCHMARK_TEMPLATE(BM_LookupHit2, HashMap<int, value, Hash>)
+    ->RangeMultiplier(10)
+    ->Range(10, maxRange);
+
+template <class T> static void BM_LookupMiss(benchmark::State &state) {
+  T hm;
+  for (int i = 0; i < state.range(0); ++i) {
+    hm.insert({i, {}});
+  }
+  int i = state.range(0);
+  for (auto _ : state) {
+    hm.find(i);
+    ++i;
+  }
+  state.counters["LoadFactor"] = benchmark::Counter(hm.load_factor());
+}
+
+template <class T> static void BM_LookupMiss2(benchmark::State &state) {
+  T hm(state.range(0), INT32_MAX);
+  for (int i = 0; i < state.range(0); ++i) {
+    hm.insert({i, {}});
+  }
+  int i = state.range(0);
+  for (auto _ : state) {
+    hm.find(i);
+    ++i;
+  }
+  state.counters["LoadFactor"] = benchmark::Counter(hm.load_factor());
+}
+
+BENCHMARK_TEMPLATE(BM_LookupMiss, std::unordered_map<int, value, Hash>)
+    ->RangeMultiplier(10)
+    ->Range(10, maxRange);
+BENCHMARK_TEMPLATE(BM_LookupMiss, HashMap2<int, value, Hash>)
+    ->RangeMultiplier(10)
+    ->Range(10, maxRange);
+BENCHMARK_TEMPLATE(BM_LookupMiss2, HashMap<int, value, Hash>)
+    ->RangeMultiplier(10)
+    ->Range(10, maxRange);
+
+template <class T> static void BM_insert(benchmark::State &state) {
+  T hm;
+  for (int i = 0; i < state.range(0); ++i) {
+    hm.insert({i, {}});
+  }
+  int i = state.range(0);
+  for (auto _ : state) {
+    const auto it = hm.insert({i, {}}).first;
+    // state.PauseTiming();
+    hm.erase(it);
+    ++i;
+    // state.ResumeTiming();
+  }
+  state.counters["LoadFactor"] = benchmark::Counter(hm.load_factor());
+}
+
+template <class T> static void BM_insert2(benchmark::State &state) {
+  T hm(0, INT32_MAX);
+  for (int i = 0; i < state.range(0); ++i) {
+    hm.insert({i, {}});
+  }
+  int i = state.range(0);
+  for (auto _ : state) {
+    const auto it = hm.insert({i, {}}).first;
+    // state.PauseTiming();
+    hm.erase(it);
+    ++i;
+    // state.ResumeTiming();
+  }
+  state.counters["LoadFactor"] = benchmark::Counter(hm.load_factor());
+}
+
+BENCHMARK_TEMPLATE(BM_insert, std::unordered_map<int, value, Hash>)
+    ->RangeMultiplier(10)
+    ->Range(10, maxRange);
+BENCHMARK_TEMPLATE(BM_insert2, HashMap<int, value, Hash>)
+    ->RangeMultiplier(10)
+    ->Range(10, maxRange);
+BENCHMARK_TEMPLATE(BM_insert, HashMap2<int, value, Hash>)
+    ->RangeMultiplier(10)
+    ->Range(10, maxRange);
 
 BENCHMARK_MAIN()

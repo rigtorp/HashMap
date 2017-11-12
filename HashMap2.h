@@ -199,6 +199,7 @@ public:
     std::swap(buckets_, other.buckets_);
     std::swap(ctrl_, other.ctrl_);
     std::swap(size_, other.size_);
+    std::swap(tombestones_, other.tombestones_);
   }
 
   // Lookup
@@ -250,19 +251,21 @@ public:
     return static_cast<float>(size() + tombestones_) / bucket_count();
   }
 
-  float max_load_factor() const noexcept { return static_cast<float>(7) / 8; }
+  const size_t k_max_load_factor = 16;
 
-  // void max_load_factor(float ml) {}
+  float max_load_factor() const noexcept {
+    return static_cast<float>(k_max_load_factor) / 32;
+  }
 
   void rehash(size_type count) {
-    count = std::max(count, (size() * 7) / 8);
+    count = std::max(count, (size() * k_max_load_factor) / 32 + 1);
     HashMap2 other(*this, count);
     swap(other);
   }
 
   void reserve(size_type count) {
-    if ((count + tombestones_) * 8 > bucket_count() * 7) {
-      rehash(bucket_count() * 2);
+    if ((count + tombestones_) * 32 > bucket_count() * k_max_load_factor) {
+      rehash((count * 32) / k_max_load_factor + 1);
     }
   }
 
@@ -297,6 +300,9 @@ private:
       if (empty) {
         int i = __builtin_ctz(empty);
         const auto idx = group * 32 + i;
+        if (ctrl_[idx] == -1) {
+          tombestones_--;
+        }
         ctrl_[idx] = hash & 0x7F;
         buckets_[idx].second = mapped_type(std::forward<Args>(args)...);
         buckets_[idx].first = key;
