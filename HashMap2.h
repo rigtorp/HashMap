@@ -70,6 +70,107 @@ return h;
 };
 */
 
+class BitsetIndexIterator {
+public:
+  BitsetIndexIterator() noexcept = default;
+
+  explicit BitsetIndexIterator(uint64_t bitset) noexcept : bitset_(bitset) {}
+
+  int operator*() const noexcept {
+    static_assert(
+        std::is_same<unsigned long, decltype(bitset_)>::value,
+        "__bultint_ctzl_() argument type must be same type as bitset_");
+    return __builtin_ctzl(bitset_);
+  }
+
+  BitsetIndexIterator &operator++() noexcept {
+    bitset_ &= ~(1 << operator*());
+    return *this;
+  }
+
+  bool operator==(const BitsetIndexIterator &other) const noexcept {
+    return other.bitset_ == bitset_;
+  }
+
+  bool operator!=(const BitsetIndexIterator &other) const noexcept {
+    return !(other == *this);
+  }
+
+private:
+  uint64_t bitset_ = 0;
+};
+
+class Bitset {
+public:
+  Bitset() noexcept = default;
+
+  explicit Bitset(uint64_t bitset) noexcept : bitset_(bitset) {}
+
+  BitsetIndexIterator begin() const noexcept {
+    return BitsetIndexIterator(bitset_);
+  }
+
+  BitsetIndexIterator end() const noexcept { return {}; }
+
+  operator bool() const noexcept { return bitset_ != 0; }
+
+private:
+  const uint64_t bitset_ = 0;
+};
+
+struct Group {
+  explicit Group(const char *group) : group_(group) {}
+
+  static constexpr int size() {
+#ifdef __AVX2__
+#warning "using avx2"
+    return 32;
+#elif __AVX__
+    return 16;
+#else
+#error "cannot vectorize"
+#endif
+  }
+
+  Bitset matching(char hash) const noexcept {
+#ifdef __AVX2__
+#warning "using avx2"
+    const auto mask = _mm256_set1_epi8(hash);
+    const auto ctrl =
+        _mm256_loadu_si256(reinterpret_cast<const __m256i_u *>(group_));
+    const auto matching = _mm256_movemask_epi8(_mm256_cmpeq_epi8(mask, ctrl));
+#elif __AVX__
+    const auto mask = _mm_set1_epi8(hash);
+    const auto ctrl =
+        _mm_loadu_si128(reinterpret_cast<const __m128i_u *>(group_));
+    const auto matching = _mm_movemask_epi8(_mm_cmpeq_epi8(mask, ctrl));
+#else
+#error "cannot vectorize"
+#endif
+    return Bitset(matching);
+  }
+
+  Bitset empty_buckets() const noexcept { return matching(-128); }
+
+  Bitset available_buckets() const noexcept {
+#ifdef __AVX2__
+#warning "using avx2"
+    const auto ctrl =
+        _mm256_loadu_si256(reinterpret_cast<const __m256i_u *>(group_));
+    const auto available = _mm256_movemask_epi8(ctrl);
+#elif __AVX__
+    const auto ctrl =
+        _mm_loadu_si128(reinterpret_cast<const __m128i_u *>(group_));
+    const auto empty = _mm_movemask_epi8(ctrl);
+#else
+#error "cannot vectorize"
+#endif
+    return Bitset(available);
+  }
+
+  const char *const group_;
+};
+
 template <typename Key, typename T, typename Hash = std::hash<Key>,
           typename KeyEqual = std::equal_to<void>>
 class HashMap2 {
@@ -251,7 +352,7 @@ public:
     return static_cast<float>(size() + tombestones_) / bucket_count();
   }
 
-  const size_t k_max_load_factor = 16;
+  static const size_t k_max_load_factor = 16;
 
   float max_load_factor() const noexcept {
     return static_cast<float>(k_max_load_factor) / 32;
@@ -279,89 +380,37 @@ private:
   std::pair<iterator, bool> emplace_impl(const K &key, Args &&... args) {
     reserve(size_ + 1);
     const auto hash = hasher()(key);
-#ifdef __AVX2__
-#warning "using avx2"
-    auto group = hash >> 7 & (buckets_.size() / 32 - 1);
+    const auto h1 = hash >> 7;
+    const auto h2 = hash & 0x7f;
+    auto groupIdx = h1 & (buckets_.size() / Group::size() - 1);
     for (;;) {
-      const auto mask = _mm256_set1_epi8(hash & 0x7F);
-      const auto ctrl =
-          _mm256_loadu_si256((const __m256i_u *)&ctrl_[group * 32]);
-      auto bitset = _mm256_movemask_epi8(_mm256_cmpeq_epi8(mask, ctrl));
-
-      while (bitset) {
-        int i = __builtin_ctz(bitset);
-        if (key_equal()(buckets_[group * 32 + i].first, key)) {
-          return {iterator(this, group * 32 + i), false};
+      const auto group = Group(&ctrl_[groupIdx * group.size()]);
+      for (const int i : group.matching(h2)) {
+        if (key_equal()(buckets_[groupIdx * group.size() + i].first, key)) {
+          return {iterator(this, groupIdx * group.size() + i), false};
         }
-        bitset &= ~(1 << i);
       }
 
-      auto empty = _mm256_movemask_epi8(ctrl);
-      if (empty) {
-        int i = __builtin_ctz(empty);
-        const auto idx = group * 32 + i;
+      for (const int i : group.available_buckets()) {
+        const auto idx = groupIdx * group.size() + i;
         if (ctrl_[idx] == -1) {
           tombestones_--;
         }
-        ctrl_[idx] = hash & 0x7F;
+        ctrl_[idx] = h2;
         buckets_[idx].second = mapped_type(std::forward<Args>(args)...);
         buckets_[idx].first = key;
         size_++;
         return {iterator(this, idx), true};
       }
 
-      group = (group + 1) & (buckets_.size() / 32 - 1);
+      groupIdx = (groupIdx + 1) & (buckets_.size() / Group::size() - 1);
     }
-#elif __AVX__
-    auto group = hash >> 7 & (buckets_.size() / 16 - 1);
-    for (;;) {
-      const auto mask = _mm_set1_epi8(hash & 0x7F);
-      const auto ctrl = _mm_loadu_si128((const __m128i_u *)&ctrl_[group * 16]);
-      auto bitset = _mm_movemask_epi8(_mm_cmpeq_epi8(mask, ctrl));
-
-      while (bitset) {
-        int i = __builtin_ctz(bitset);
-        if (key_equal()(buckets_[group * 16 + i].first, key)) {
-          return {iterator(this, group * 16 + i), false};
-        }
-        bitset &= ~(1 << i);
-      }
-
-      auto empty = _mm_movemask_epi8(ctrl);
-      if (empty) {
-        int i = __builtin_ctz(empty);
-        const auto idx = group * 16 + i;
-        ctrl_[idx] = hash & 0x7F;
-        buckets_[idx].second = mapped_type(std::forward<Args>(args)...);
-        buckets_[idx].first = key;
-        size_++;
-        return {iterator(this, idx), true};
-      }
-
-      group = (group + 1) & (buckets_.size() / 16 - 1);
-    }
-#else
-#error "cannot vecotirze"
-#endif
   }
 
   void erase_impl(iterator it) {
     size_t bucket = it.idx_;
-#ifdef __AVX2__
-#warning "using avx2"
-    const auto group = bucket / 32;
-    const auto mask2 = _mm256_set1_epi8(-128);
-    const auto ctrl = _mm256_loadu_si256((const __m256i_u *)&ctrl_[group * 32]);
-    const auto empty = _mm256_movemask_epi8(_mm256_cmpeq_epi8(mask2, ctrl));
-#elif __AVX__
-    const auto group = bucket / 16;
-    const auto mask2 = _mm_set1_epi8(-128);
-    const auto ctrl = _mm_loadu_si128((const __m128i_u *)&ctrl_[group * 16]);
-    const auto empty = _mm_movemask_epi8(_mm_cmpeq_epi8(mask2, ctrl));
-#else
-#error "cannot vectorize"
-#endif
-    if (empty) {
+    const auto group = Group(&ctrl_[bucket & (Group::size() - 1)]);
+    if (group.empty_buckets()) {
       ctrl_[bucket] = -128;
     } else {
       ctrl_[bucket] = -1;
@@ -395,63 +444,23 @@ private:
     return find_impl(key) == end() ? 0 : 1;
   }
 
-  template <typename K>
-  iterator find_impl(const K &key) noexcept(noexcept(hasher()(key))) {
+  template <typename K> iterator find_impl(const K &key) {
     const auto hash = hasher()(key);
-#ifdef __AVX2__
-#warning "using avx2"
-    auto group = hash >> 7 & (buckets_.size() / 32 - 1);
+    const auto h1 = hash >> 7;
+    const auto h2 = hash & 0x7f;
+    auto groupIdx = h1 & (buckets_.size() / Group::size() - 1);
     for (;;) {
-      const auto mask = _mm256_set1_epi8(hash & 0x7F);
-      const auto ctrl =
-          _mm256_loadu_si256((const __m256i_u *)&ctrl_[group * 32]);
-      auto bitset = _mm256_movemask_epi8(_mm256_cmpeq_epi8(mask, ctrl));
-
-      while (bitset) {
-        int i = __builtin_ctz(bitset);
-        if (key_equal()(buckets_[group * 32 + i].first, key)) {
-          return iterator(this, group * 32 + i);
+      const auto group = Group(&ctrl_[groupIdx * Group::size()]);
+      for (const int i : group.matching(h2)) {
+        if (key_equal()(buckets_[groupIdx * group.size() + i].first, key)) {
+          return iterator(this, groupIdx * group.size() + i);
         }
-        bitset &= ~(1 << i);
       }
-
-      const auto mask2 = _mm256_set1_epi8(-128);
-      const auto empty = _mm256_movemask_epi8(_mm256_cmpeq_epi8(mask2, ctrl));
-      if (empty) {
+      if (group.empty_buckets()) {
         return end();
       }
-
-      group = (group + 1) & (buckets_.size() / 32 - 1);
+      groupIdx = (groupIdx + 1) & (buckets_.size() / group.size() - 1);
     }
-#else
-#ifdef __AVX__
-#warning "using avx"
-    auto group = group_idx(hash);
-    for (;;) {
-      const auto mask = _mm_set1_epi8(hash & 0x7F);
-      const auto ctrl = _mm_loadu_si128((const __m128i_u *)&ctrl_[group * 16]);
-      auto bitset = _mm_movemask_epi8(_mm_cmpeq_epi8(mask, ctrl));
-
-      while (bitset) {
-        int i = __builtin_ctz(bitset);
-        if (key_equal()(buckets_[group * 16 + i].first, key)) {
-          return iterator(this, group * 16 + i);
-        }
-        bitset &= ~(1 << i);
-      }
-
-      const auto mask2 = _mm_set1_epi8(-128);
-      const auto empty = _mm_movemask_epi8(_mm_cmpeq_epi8(mask2, ctrl));
-      if (empty) {
-        return end();
-      }
-
-      group = (group + 1) & (buckets_.size() / 16 - 1);
-    }
-#else
-#error "cannot vectorize"
-#endif
-#endif
   }
 
   template <typename K> const_iterator find_impl(const K &key) const {
@@ -479,7 +488,7 @@ private:
 
 private:
   buckets buckets_;
-  std::vector<int8_t> ctrl_;
+  std::vector<char> ctrl_;
   size_t size_ = 0;
   size_t tombestones_ = 0;
 };

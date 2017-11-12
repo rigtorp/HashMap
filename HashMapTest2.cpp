@@ -51,8 +51,8 @@ struct Hash {
 };
 
 struct Equal {
-  bool operator()(int lhs, int rhs) { return lhs == rhs; }
-  bool operator()(int lhs, const std::string &rhs) {
+  bool operator()(int lhs, int rhs) const noexcept { return lhs == rhs; }
+  bool operator()(int lhs, const std::string &rhs) const noexcept {
     return lhs == std::stoi(rhs);
   }
 };
