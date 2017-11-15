@@ -54,37 +54,31 @@ Disadvantages:
 
 namespace rigtorp {
 
-/*
-struct Hash {
-template <typename T>
-std::enable_if_t<std::is_integral<T>::value, uint64_t> operator()(T v) const
-  noexcept {
-uint64_t h = static_cast<uint64_t>(v);
-h ^= h >> 33;
-h *= 0xff51afd7ed558ccd;
-h ^= h >> 33;
-h *= 0xc4ceb9fe1a85ec53;
-h ^= h >> 33;
-return h;
-}
-};
-*/
+namespace detail {
 
-class BitsetIndexIterator {
+struct Hash {
+  template <typename T, typename = std::enable_if_t<std::is_integral<T>::value>>
+  uint64_t operator()(T v) const noexcept {
+    auto h = static_cast<uint64_t>(v);
+    h ^= h >> 33;
+    h *= 0xff51afd7ed558ccd;
+    h ^= h >> 33;
+    h *= 0xc4ceb9fe1a85ec53;
+    h ^= h >> 33;
+    return h;
+  }
+};
+
+template <typename T> class BitsetIndexIterator {
 public:
   BitsetIndexIterator() noexcept = default;
 
-  explicit BitsetIndexIterator(uint64_t bitset) noexcept : bitset_(bitset) {}
+  explicit BitsetIndexIterator(T bitset) noexcept : bitset_(bitset) {}
 
-  int operator*() const noexcept {
-    static_assert(
-        std::is_same<unsigned long, decltype(bitset_)>::value,
-        "__bultint_ctzl_() argument type must be same type as bitset_");
-    return __builtin_ctzl(bitset_);
-  }
+  int operator*() const noexcept { return ctz(bitset_); }
 
   BitsetIndexIterator &operator++() noexcept {
-    bitset_ &= ~(1 << operator*());
+    bitset_ &= ~(static_cast<T>(1) << operator*());
     return *this;
   }
 
@@ -97,44 +91,54 @@ public:
   }
 
 private:
-  uint64_t bitset_ = 0;
+  static constexpr int ctz(uint32_t x) {
+    static_assert(std::is_same<unsigned int, T>::value);
+    return __builtin_ctz(x);
+  }
+
+  static constexpr int ctz(uint64_t x) {
+    static_assert(std::is_same<unsigned long, T>::value);
+    return __builtin_ctzl(x);
+  }
+
+private:
+  T bitset_ = 0;
 };
 
-class Bitset {
+template <typename T> class Bitset {
 public:
   Bitset() noexcept = default;
 
-  explicit Bitset(uint64_t bitset) noexcept : bitset_(bitset) {}
+  explicit Bitset(T bitset) noexcept : bitset_(bitset) {}
 
-  BitsetIndexIterator begin() const noexcept {
-    return BitsetIndexIterator(bitset_);
+  BitsetIndexIterator<T> begin() const noexcept {
+    return BitsetIndexIterator<T>(bitset_);
   }
 
-  BitsetIndexIterator end() const noexcept { return {}; }
+  BitsetIndexIterator<T> end() const noexcept { return {}; }
 
-  operator bool() const noexcept { return bitset_ != 0; }
+  explicit operator bool() const noexcept { return bitset_ != 0; }
 
 private:
-  const uint64_t bitset_ = 0;
+  const T bitset_ = 0;
 };
 
-struct Group {
+class Group {
+public:
   explicit Group(const char *group) : group_(group) {}
 
   static constexpr int size() {
 #ifdef __AVX2__
-#warning "using avx2"
     return 32;
 #elif __AVX__
     return 16;
 #else
-#error "cannot vectorize"
+    return 1;
 #endif
   }
 
-  Bitset matching(char hash) const noexcept {
+  Bitset<uint32_t> matching(char hash) const noexcept {
 #ifdef __AVX2__
-#warning "using avx2"
     const auto mask = _mm256_set1_epi8(hash);
     const auto ctrl =
         _mm256_loadu_si256(reinterpret_cast<const __m256i_u *>(group_));
@@ -145,45 +149,45 @@ struct Group {
         _mm_loadu_si128(reinterpret_cast<const __m128i_u *>(group_));
     const auto matching = _mm_movemask_epi8(_mm_cmpeq_epi8(mask, ctrl));
 #else
-#error "cannot vectorize"
+    const bool matching = group_[0] == hash;
 #endif
-    return Bitset(matching);
+    return Bitset<uint32_t>(matching);
   }
 
-  Bitset empty_buckets() const noexcept { return matching(-128); }
+  Bitset<uint32_t> empty_buckets() const noexcept { return matching(-128); }
 
-  Bitset available_buckets() const noexcept {
+  Bitset<uint32_t> available_buckets() const noexcept {
 #ifdef __AVX2__
-#warning "using avx2"
     const auto ctrl =
         _mm256_loadu_si256(reinterpret_cast<const __m256i_u *>(group_));
     const auto available = _mm256_movemask_epi8(ctrl);
 #elif __AVX__
     const auto ctrl =
         _mm_loadu_si128(reinterpret_cast<const __m128i_u *>(group_));
-    const auto empty = _mm_movemask_epi8(ctrl);
+    const auto available = _mm_movemask_epi8(ctrl);
 #else
-#error "cannot vectorize"
+    const bool available = group_[0] & -128;
 #endif
-    return Bitset(available);
+    return Bitset<uint32_t>(available);
   }
 
+private:
   const char *const group_;
 };
+}
 
-template <typename Key, typename T, typename Hash = std::hash<Key>,
+template <typename Key, typename T, typename Hash = detail::Hash,
           typename KeyEqual = std::equal_to<void>>
 class HashMap2 {
 public:
   using key_type = Key;
   using mapped_type = T;
-  using value_type = std::pair<Key, T>;
+  using value_type = std::pair<const Key, T>;
   using size_type = std::size_t;
   using hasher = Hash;
   using key_equal = KeyEqual;
   using reference = value_type &;
   using const_reference = const value_type &;
-  using buckets = std::vector<value_type>;
 
   template <typename ContT, typename IterVal> struct hm_iterator {
     using difference_type = std::ptrdiff_t;
@@ -216,7 +220,7 @@ public:
         : hm_(other.hm_), idx_(other.idx_) {}
 
     void advance_past_empty() {
-      while (idx_ < hm_->buckets_.size() && hm_->ctrl_[idx_] & -128) {
+      while (idx_ < hm_->num_buckets_ && hm_->ctrl_[idx_] & -128) {
         ++idx_;
       }
     }
@@ -230,23 +234,60 @@ public:
   using const_iterator = hm_iterator<const HashMap2, const value_type>;
 
 public:
-  HashMap2() : HashMap2(0) {}
+  HashMap2() : HashMap2(0){};
 
   explicit HashMap2(size_type bucket_count) {
-    bucket_count = std::max<size_t>(bucket_count, 32);
+    bucket_count = std::max<size_t>(bucket_count, 256);
     size_t pow2 = 1;
     while (pow2 < bucket_count) {
       pow2 <<= 1;
     }
-    buckets_.resize(pow2);
-    ctrl_.resize(pow2, -128);
+    bucket_count = pow2;
+    void *ptr = operator new(sizeof(value_type) * bucket_count + bucket_count);
+    buckets_ = static_cast<value_type *>(ptr);
+    ctrl_ = static_cast<char *>(ptr) + sizeof(value_type) * bucket_count;
+    std::fill(ctrl_, ctrl_ + bucket_count, -128);
+    num_buckets_ = bucket_count;
   }
 
-  HashMap2(const HashMap2 &other, size_type bucket_count)
+  template <typename InputIt>
+  HashMap2(InputIt first, InputIt last)
+      : HashMap2(first, last, std::distance(first, last)) {
+    // TODO size according to load factor
+  }
+
+  template <typename InputIt>
+  HashMap2(InputIt first, InputIt last, size_type bucket_count)
       : HashMap2(bucket_count) {
-    for (auto it = other.begin(); it != other.end(); ++it) {
-      insert(*it);
+    insert(first, last);
+  }
+
+  HashMap2(const HashMap2 &other)
+      : HashMap2(other.begin(), other.end(), other.size()) {
+    // TODO optimize for the case when value_type is trivially_copyable
+    // TODO size according to load factor
+  }
+
+  HashMap2(HashMap2 &&other) noexcept { swap(other); }
+
+  ~HashMap2() {
+    if (!std::is_trivially_destructible<value_type>::value) {
+      erase(begin(), end());
     }
+    operator delete(buckets_);
+  }
+
+  HashMap2 &operator=(const HashMap2 &other) {
+    if (&other != this) {
+      HashMap2 copy(other);
+      swap(copy);
+    }
+    return *this;
+  }
+
+  HashMap2 &operator=(HashMap2 &&other) noexcept {
+    swap(other);
+    return *this;
   }
 
   // Iterators
@@ -256,16 +297,16 @@ public:
 
   const_iterator cbegin() const { return const_iterator(this); }
 
-  iterator end() { return iterator(this, buckets_.size()); }
+  iterator end() { return iterator(this, num_buckets_); }
 
-  const_iterator end() const { return const_iterator(this, buckets_.size()); }
+  const_iterator end() const { return const_iterator(this, num_buckets_); }
 
-  const_iterator cend() const { return const_iterator(this, buckets_.size()); }
+  const_iterator cend() const { return const_iterator(this, num_buckets_); }
 
   // Capacity
   bool empty() const noexcept { return size() == 0; }
 
-  size_type size() const noexcept { return size_; }
+  size_type size() const noexcept { return num_entries_; }
 
   size_type max_size() const noexcept {
     return std::numeric_limits<size_type>::max();
@@ -285,12 +326,34 @@ public:
     return emplace_impl(value.first, std::move(value.second));
   }
 
+  template <typename InputIt> void insert(InputIt first, InputIt last) {
+    for (; first != last; ++first) {
+      insert(*first);
+    }
+  }
+
   template <typename... Args>
   std::pair<iterator, bool> emplace(Args &&... args) {
     return emplace_impl(std::forward<Args>(args)...);
   }
 
+  template <typename... Args>
+  std::pair<iterator, bool> try_emplace(const key_type &k, Args &&... args) {
+    return emplace_impl(k, std::forward<Args>(args)...);
+  }
+
+  template <typename... Args>
+  std::pair<iterator, bool> try_emplace(const key_type &&k, Args &&... args) {
+    return emplace_impl(std::move(k), std::forward<Args>(args)...);
+  }
+
   void erase(iterator it) { erase_impl(it); }
+
+  void erase(iterator first, iterator last) {
+    for (; first != last; ++first) {
+      erase(first);
+    }
+  }
 
   size_type erase(const key_type &key) { return erase_impl(key); }
 
@@ -299,8 +362,9 @@ public:
   void swap(HashMap2 &other) {
     std::swap(buckets_, other.buckets_);
     std::swap(ctrl_, other.ctrl_);
-    std::swap(size_, other.size_);
-    std::swap(tombestones_, other.tombestones_);
+    std::swap(num_buckets_, other.num_buckets_);
+    std::swap(num_entries_, other.num_entries_);
+    std::swap(num_tombestones_, other.num_tombestones_);
   }
 
   // Lookup
@@ -315,7 +379,7 @@ public:
   }
 
   mapped_type &operator[](const key_type &key) {
-    return emplace_impl(key).first->second;
+    return emplace_impl(key, mapped_type{}).first->second;
   }
 
   size_type count(const key_type &key) const noexcept {
@@ -341,7 +405,7 @@ public:
   }
 
   // Bucket interface
-  size_type bucket_count() const noexcept { return buckets_.size(); }
+  size_type bucket_count() const noexcept { return num_buckets_; }
 
   size_type max_bucket_count() const noexcept {
     return std::numeric_limits<size_type>::max();
@@ -349,24 +413,28 @@ public:
 
   // Hash policy
   float load_factor() const noexcept {
-    return static_cast<float>(size() + tombestones_) / bucket_count();
+    return static_cast<float>(size() + num_tombestones_) / bucket_count();
   }
 
-  static const size_t k_max_load_factor = 16;
+  static const size_t k_max_load_factor = 28;
 
   float max_load_factor() const noexcept {
     return static_cast<float>(k_max_load_factor) / 32;
   }
 
   void rehash(size_type count) {
+    // TODO rehash inplace if bucket count did not change
     count = std::max(count, (size() * k_max_load_factor) / 32 + 1);
-    HashMap2 other(*this, count);
+    HashMap2 other(begin(), end(), count);
     swap(other);
   }
 
   void reserve(size_type count) {
-    if ((count + tombestones_) * 32 > bucket_count() * k_max_load_factor) {
-      rehash((count * 32) / k_max_load_factor + 1);
+    if ((count + num_tombestones_) * 32 > bucket_count() * k_max_load_factor) {
+      rehash((count * 32) / 24 + 1);
+    }
+    if (count * 32 > bucket_count() * 24) {
+      rehash((count * 32) / 24 + 1);
     }
   }
 
@@ -376,51 +444,55 @@ public:
   key_equal key_eq() const { return key_equal(); }
 
 private:
+  using Group = detail::Group;
+
   template <typename K, typename... Args>
   std::pair<iterator, bool> emplace_impl(const K &key, Args &&... args) {
-    reserve(size_ + 1);
     const auto hash = hasher()(key);
+    const auto it = find_impl(key, hash);
+    if (it != end()) {
+      return {it, false};
+    }
+    reserve(num_entries_ + 1);
     const auto h1 = hash >> 7;
     const auto h2 = hash & 0x7f;
-    auto groupIdx = h1 & (buckets_.size() / Group::size() - 1);
-    for (;;) {
-      const auto group = Group(&ctrl_[groupIdx * group.size()]);
-      for (const int i : group.matching(h2)) {
-        if (key_equal()(buckets_[groupIdx * group.size() + i].first, key)) {
-          return {iterator(this, groupIdx * group.size() + i), false};
+    for (auto group_idx = h1 & (num_buckets_ / Group::size() - 1);;
+         group_idx = (group_idx + 1) & (num_buckets_ / Group::size() - 1)) {
+      const auto group = Group(&ctrl_[group_idx * Group::size()]);
+      for (const int idx : group.available_buckets()) {
+        const auto bucket_idx = group_idx * group.size() + idx;
+        if (ctrl_[bucket_idx] == -1) {
+          num_tombestones_--;
         }
+        ctrl_[bucket_idx] = h2;
+        new (&buckets_[bucket_idx])
+            value_type(key, std::forward<Args>(args)...);
+        num_entries_++;
+        return {iterator(this, bucket_idx), true};
       }
-
-      for (const int i : group.available_buckets()) {
-        const auto idx = groupIdx * group.size() + i;
-        if (ctrl_[idx] == -1) {
-          tombestones_--;
-        }
-        ctrl_[idx] = h2;
-        buckets_[idx].second = mapped_type(std::forward<Args>(args)...);
-        buckets_[idx].first = key;
-        size_++;
-        return {iterator(this, idx), true};
-      }
-
-      groupIdx = (groupIdx + 1) & (buckets_.size() / Group::size() - 1);
     }
   }
 
-  void erase_impl(iterator it) {
-    size_t bucket = it.idx_;
-    const auto group = Group(&ctrl_[bucket & (Group::size() - 1)]);
+  void erase_impl(iterator it) noexcept(
+      std::is_nothrow_destructible<value_type>::value) {
+    assert(it.hm_ == this);
+    assert(it.idx_ < num_buckets_);
+    size_t bucket_idx = it.idx_;
+    assert(ctrl_[bucket_idx] ==
+           static_cast<char>(hasher()(buckets_[bucket_idx].first) & 0x7f));
+    const auto group = Group(&ctrl_[bucket_idx & (Group::size() - 1)]);
+    buckets_[bucket_idx].~value_type();
     if (group.empty_buckets()) {
-      ctrl_[bucket] = -128;
+      ctrl_[bucket_idx] = -128;
     } else {
-      ctrl_[bucket] = -1;
-      tombestones_++;
+      ctrl_[bucket_idx] = -1;
+      num_tombestones_++;
     }
-    size_--;
+    num_entries_--;
   }
 
   template <typename K> size_type erase_impl(const K &key) {
-    auto it = find_impl(key);
+    const auto it = find_impl(key);
     if (it != end()) {
       erase_impl(it);
       return 1;
@@ -429,7 +501,7 @@ private:
   }
 
   template <typename K> mapped_type &at_impl(const K &key) {
-    iterator it = find_impl(key);
+    const auto it = find_impl(key);
     if (it != end()) {
       return it->second;
     }
@@ -445,51 +517,36 @@ private:
   }
 
   template <typename K> iterator find_impl(const K &key) {
-    const auto hash = hasher()(key);
-    const auto h1 = hash >> 7;
-    const auto h2 = hash & 0x7f;
-    auto groupIdx = h1 & (buckets_.size() / Group::size() - 1);
-    for (;;) {
-      const auto group = Group(&ctrl_[groupIdx * Group::size()]);
-      for (const int i : group.matching(h2)) {
-        if (key_equal()(buckets_[groupIdx * group.size() + i].first, key)) {
-          return iterator(this, groupIdx * group.size() + i);
-        }
-      }
-      if (group.empty_buckets()) {
-        return end();
-      }
-      groupIdx = (groupIdx + 1) & (buckets_.size() / group.size() - 1);
-    }
+    return find_impl(key, hasher()(key));
   }
 
   template <typename K> const_iterator find_impl(const K &key) const {
     return const_cast<HashMap2 *>(this)->find_impl(key);
   }
 
-  template <typename K> size_t key_to_idx(const K &key) const {
-    const size_t mask = buckets_.size() - 1;
-    return hasher()(key) & mask;
-  }
-
-  size_t group_idx(const size_t hash) {
-    return hash >> 7 & (buckets_.size() / 16 - 1);
-  }
-
-  size_t probe_next(size_t idx) const {
-    const size_t mask = buckets_.size() - 1;
-    return (idx + 1) & mask;
-  }
-
-  size_t diff(size_t a, size_t b) const {
-    const size_t mask = buckets_.size() - 1;
-    return (buckets_.size() + (a - b)) & mask;
+  template <typename K> iterator find_impl(const K &key, size_type hash) {
+    const auto h1 = hash >> 7;
+    const auto h2 = hash & 0x7f;
+    for (auto group_idx = h1 & (num_buckets_ / Group::size() - 1);;
+         group_idx = (group_idx + 1) & (num_buckets_ / Group::size() - 1)) {
+      const auto group = Group(&ctrl_[group_idx * Group::size()]);
+      for (const int idx : group.matching(h2)) {
+        const auto bucket_idx = group_idx * Group::size() + idx;
+        if (key_equal()(buckets_[bucket_idx].first, key)) {
+          return iterator(this, bucket_idx);
+        }
+      }
+      if (group.empty_buckets()) {
+        return end();
+      }
+    }
   }
 
 private:
-  buckets buckets_;
-  std::vector<char> ctrl_;
-  size_t size_ = 0;
-  size_t tombestones_ = 0;
+  value_type *buckets_ = nullptr;
+  char *ctrl_ = nullptr;
+  size_t num_buckets_ = 0;
+  size_t num_entries_ = 0;
+  size_t num_tombestones_ = 0;
 };
 }
