@@ -36,7 +36,7 @@ int main(int argc, char *argv[]) {
   constexpr size_t count = 1000;
   constexpr size_t iters = 100000000;
 
-  auto b = [count, iters](const char *n, auto &m) {
+  auto b = [](const char *n, auto &m) {
     std::mt19937 mt;
     std::uniform_int_distribution<int> ud(2, count);
 
