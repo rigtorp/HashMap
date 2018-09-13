@@ -20,11 +20,11 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
  */
 
-#include "HashMap.h"
 #include <chrono>
 #include <google/dense_hash_map>
 #include <iostream>
 #include <random>
+#include <rigtorp/HashMap.h>
 #include <unordered_map>
 
 using namespace rigtorp;
@@ -36,7 +36,7 @@ int main(int argc, char *argv[]) {
   constexpr size_t count = 1000;
   constexpr size_t iters = 100000000;
 
-  auto b = [count, iters](const char *n, auto &m) {
+  auto b = [](const char *n, auto &m) {
     std::mt19937 mt;
     std::uniform_int_distribution<int> ud(2, count);
 
