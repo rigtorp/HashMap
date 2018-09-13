@@ -20,11 +20,11 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
  */
 
-#include "HashMap.h"
 #include <chrono>
 #include <google/dense_hash_map>
 #include <iostream>
 #include <random>
+#include <rigtorp/HashMap.h>
 #include <unordered_map>
 
 using namespace rigtorp;

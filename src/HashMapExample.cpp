@@ -1,5 +1,5 @@
-#include "HashMap.h"
 #include <iostream>
+#include <rigtorp/HashMap.h>
 
 int main(int argc, char *argv[]) {
   (void)argc, (void)argv;
