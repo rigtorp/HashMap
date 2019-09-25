@@ -89,6 +89,12 @@ heavy workload.
 | google::dense_hash_map |     122 |
 | std::unordered_map     |     220 |
 
+## Cited by
+
+HashMap has been cited by the following papers:
+- Koppl, Dominik. “Separate Chaining Meets Compact Hashing.” (2019).
+  https://arxiv.org/abs/1905.00163 
+
 ## About
 
 This project was created by [Erik Rigtorp](http://rigtorp.se)
