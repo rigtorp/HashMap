@@ -136,29 +136,37 @@ public:
   }
 
   // Iterators
-  iterator begin() { return iterator(this); }
+  iterator begin() noexcept { return iterator(this); }
 
-  const_iterator begin() const { return const_iterator(this); }
+  const_iterator begin() const noexcept { return const_iterator(this); }
 
-  const_iterator cbegin() const { return const_iterator(this); }
+  const_iterator cbegin() const noexcept { return const_iterator(this); }
 
-  iterator end() { return iterator(this, buckets_.size()); }
+  iterator end() noexcept { return iterator(this, buckets_.size()); }
 
-  const_iterator end() const { return const_iterator(this, buckets_.size()); }
+  const_iterator end() const noexcept {
+    return const_iterator(this, buckets_.size());
+  }
 
-  const_iterator cend() const { return const_iterator(this, buckets_.size()); }
+  const_iterator cend() const noexcept {
+    return const_iterator(this, buckets_.size());
+  }
 
   // Capacity
-  bool empty() const { return size() == 0; }
+  bool empty() const noexcept { return size() == 0; }
 
-  size_type size() const { return size_; }
+  size_type size() const noexcept { return size_; }
 
-  size_type max_size() const { return std::numeric_limits<size_type>::max(); }
+  size_type max_size() const noexcept { return buckets_.max_size() / 2; }
 
   // Modifiers
-  void clear() {
-    HashMap other(bucket_count(), empty_key_);
-    swap(other);
+  void clear() noexcept {
+    for (auto &b : buckets_) {
+      if (b.first != empty_key_) {
+        b.first = empty_key_;
+      }
+    }
+    size_ = 0;
   }
 
   std::pair<iterator, bool> insert(const value_type &value) {
@@ -180,7 +188,7 @@ public:
 
   template <typename K> size_type erase(const K &x) { return erase_impl(x); }
 
-  void swap(HashMap &other) {
+  void swap(HashMap &other) noexcept {
     std::swap(buckets_, other.buckets_);
     std::swap(size_, other.size_);
     std::swap(empty_key_, other.empty_key_);
@@ -220,9 +228,7 @@ public:
   // Bucket interface
   size_type bucket_count() const noexcept { return buckets_.size(); }
 
-  size_type max_bucket_count() const noexcept {
-    return std::numeric_limits<size_type>::max();
-  }
+  size_type max_bucket_count() const noexcept { return buckets_.max_size(); }
 
   // Hash policy
   void rehash(size_type count) {
@@ -317,17 +323,18 @@ private:
     return const_cast<HashMap *>(this)->find_impl(key);
   }
 
-  template <typename K> size_t key_to_idx(const K &key) const {
+  template <typename K>
+  size_t key_to_idx(const K &key) const noexcept(noexcept(hasher()(key))) {
     const size_t mask = buckets_.size() - 1;
     return hasher()(key) & mask;
   }
 
-  size_t probe_next(size_t idx) const {
+  size_t probe_next(size_t idx) const noexcept {
     const size_t mask = buckets_.size() - 1;
     return (idx + 1) & mask;
   }
 
-  size_t diff(size_t a, size_t b) const {
+  size_t diff(size_t a, size_t b) const noexcept {
     const size_t mask = buckets_.size() - 1;
     return (buckets_.size() + (a - b)) & mask;
   }
