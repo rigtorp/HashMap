@@ -53,7 +53,8 @@ Disadvantages:
 namespace rigtorp {
 
 template <typename Key, typename T, typename Hash = std::hash<Key>,
-          typename KeyEqual = std::equal_to<void>>
+          typename KeyEqual = std::equal_to<void>,
+          typename Allocator = std::allocator<std::pair<Key, T>>>
 class HashMap {
 public:
   using key_type = Key;
@@ -62,9 +63,10 @@ public:
   using size_type = std::size_t;
   using hasher = Hash;
   using key_equal = KeyEqual;
+  using allocator_type = Allocator;
   using reference = value_type &;
   using const_reference = const value_type &;
-  using buckets = std::vector<value_type>;
+  using buckets = std::vector<value_type, allocator_type>;
 
   template <typename ContT, typename IterVal> struct hm_iterator {
     using difference_type = std::ptrdiff_t;
@@ -112,7 +114,9 @@ public:
   using const_iterator = hm_iterator<const HashMap, const value_type>;
 
 public:
-  HashMap(size_type bucket_count, key_type empty_key) : empty_key_(empty_key) {
+  HashMap(size_type bucket_count, key_type empty_key,
+          const allocator_type &alloc = allocator_type())
+      : empty_key_(empty_key), buckets_(alloc) {
     size_t pow2 = 1;
     while (pow2 < bucket_count) {
       pow2 <<= 1;
@@ -121,10 +125,14 @@ public:
   }
 
   HashMap(const HashMap &other, size_type bucket_count)
-      : HashMap(bucket_count, other.empty_key_) {
+      : HashMap(bucket_count, other.empty_key_, other.get_allocator()) {
     for (auto it = other.begin(); it != other.end(); ++it) {
       insert(*it);
     }
+  }
+
+  allocator_type get_allocator() const noexcept {
+    return buckets_.get_allocator();
   }
 
   // Iterators
@@ -329,4 +337,4 @@ private:
   buckets buckets_;
   size_t size_ = 0;
 };
-}
+} // namespace rigtorp
