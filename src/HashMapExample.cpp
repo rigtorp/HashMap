@@ -1,3 +1,6 @@
+// © 2017-2020 Erik Rigtorp <erik@rigtorp.se>
+// SPDX-License-Identifier: MIT
+
 #include <iostream>
 #include <string>
 
