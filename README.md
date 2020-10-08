@@ -1,5 +1,6 @@
 # HashMap.h
 
+[![C/C++ CI](https://github.com/rigtorp/HashMap/workflows/C/C++%20CI/badge.svg)](https://github.com/rigtorp/HashMap/actions)
 [![Build Status](https://travis-ci.org/rigtorp/HashMap.svg?branch=master)](https://travis-ci.org/rigtorp/HashMap)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](https://raw.githubusercontent.com/rigtorp/HashMap/master/LICENSE)
 
