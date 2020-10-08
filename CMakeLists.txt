@@ -19,11 +19,15 @@ if(CMAKE_CURRENT_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
         add_compile_options(-Wall -Wextra -Wpedantic)
     endif()
 
-    find_package(absl REQUIRED)
+    find_package(absl)
 
     add_executable(HashMapBenchmark src/HashMapBenchmark.cpp)
-    target_link_libraries(HashMapBenchmark HashMap absl::flat_hash_map)
-    target_compile_options(HashMapBenchmark PRIVATE -mavx)
+    target_link_libraries(HashMapBenchmark HashMap)
+    if (absl_FOUND)
+        target_link_libraries(HashMapBenchmark absl::flat_hash_map)
+    endif()
+    target_compile_options(HashMapBenchmark PRIVATE -mavx2)
+    target_compile_features(HashMapBenchmark INTERFACE cxx_std_17)
 
     add_executable(HashMapExample src/HashMapExample.cpp)
     target_link_libraries(HashMapExample HashMap)

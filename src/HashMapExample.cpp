@@ -1,4 +1,6 @@
 #include <iostream>
+#include <string>
+
 #include <rigtorp/HashMap.h>
 
 int main(int argc, char *argv[]) {

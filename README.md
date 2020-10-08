@@ -10,7 +10,7 @@ interface, but with much higher performance for many workloads.
 
 This hash table uses [open addressing][1] with [linear probing][2] and
 backshift deletion. Open addressing and linear probing minimizes
-memory allocations and achives high cache effiency. Backshift deletion
+memory allocations and achieves high cache efficiency. Backshift deletion
 keeps performance high for delete heavy workloads by not clobbering
 the hash table with [tombestones][3].
 
@@ -78,16 +78,35 @@ The rest of the member functions are implemented as for
 
 ## Benchmark
 
-The benchmark first inserts 1M random entries in the table and then
-removes the last inserted item and inserts a new random entry 1
-billion times. This is benchmark is designed to simulate a delete
-heavy workload.
+A benchmark `src/HashMapBenchmark.cpp` is included with the sources. The
+benchmark simulates a delete heavy workload where items are repeatedly inserted
+and deleted. 
 
-| Implementation         | ns/iter |
-| ---------------------- | -------:|
-| HashMap                |      77 |
-| google::dense_hash_map |     122 |
-| std::unordered_map     |     220 |
+I ran this benchmark on the following configuration:
+
+- AMD Ryzen 9 3900X
+- Linux 5.8.4-200.fc32.x86_64
+- gcc (GCC) 10.2.1 20200723 (Red Hat 10.2.1-1)
+- Isolated a core complex (CCX) using `isolcpus` for running the benchmark
+
+When working set fits in L3 cache (`HashMapBenchmark -c 100000 -i 100000000`):
+
+| Implementation         | mean ns/iter | max ns/iter |
+| ---------------------- | -----------: | ----------: |
+| HashMap                |           24 |        1082 |
+| absl::flat_hash_map    |           24 |        2074 |
+| google::dense_hash_map |           49 |      689846 |
+| std::unordered_map     |           67 |       10299 |
+
+When working set is larger than L3 cache (`HashMapBenchmark -c 10000000 -i 1000000000`):
+
+| Implementation         | mean ns/iter | max ns/iter |
+| ---------------------- | -----------: | ----------: |
+| HashMap                |           75 |       19026 |
+| absl::flat_hash_map    |          101 |       19848 |
+| google::dense_hash_map |          111 |   226083255 |
+| std::unordered_map     |          408 |       22422 |
+
 
 ## Cited by
 

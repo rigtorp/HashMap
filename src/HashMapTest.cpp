@@ -22,6 +22,8 @@ SOFTWARE.
 
 #include <algorithm>
 #include <array>
+#include <string>
+
 #include <rigtorp/HashMap.h>
 
 using namespace rigtorp;
