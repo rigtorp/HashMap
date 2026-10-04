@@ -1,9 +1,12 @@
 // © 2017-2020 Erik Rigtorp <erik@rigtorp.se>
 // SPDX-License-Identifier: MIT
 
+#if defined(__x86_64__) || defined(_M_X64)
 #include <nmmintrin.h> // _mm_crc32_u64
+#endif
 
 #include <chrono>
+#include <cstdint>
 #include <iostream>
 #include <random>
 #include <unistd.h>
@@ -50,9 +53,21 @@ template <typename T> struct huge_page_allocator {
   }
 
   void deallocate(T *p, std::size_t n) {
-    munmap(p, round_to_huge_page_size(n));
+    munmap(p, round_to_huge_page_size(n * sizeof(T)));
   }
 };
+
+template <typename T, typename U>
+bool operator==(const huge_page_allocator<T> &,
+                const huge_page_allocator<U> &) noexcept {
+  return true;
+}
+
+template <typename T, typename U>
+bool operator!=(const huge_page_allocator<T> &,
+                const huge_page_allocator<U> &) noexcept {
+  return false;
+}
 #else
 template <typename T> using huge_page_allocator = std::allocator<T>;
 #endif
@@ -98,21 +113,35 @@ int main(int argc, char *argv[]) {
   };
 
   struct hash {
-    size_t operator()(size_t h) const noexcept { return _mm_crc32_u64(0, h); }
+    size_t operator()(size_t h) const noexcept {
+#if defined(__x86_64__) || defined(_M_X64)
+      return _mm_crc32_u64(0, h);
+#else
+      // MurmurHash3's public-domain fmix64 finalizer, by Austin Appleby:
+      // https://github.com/aappleby/smhasher/blob/master/src/MurmurHash3.cpp
+      uint64_t x = h;
+      x ^= x >> 33;
+      x *= UINT64_C(0xff51afd7ed558ccd);
+      x ^= x >> 33;
+      x *= UINT64_C(0xc4ceb9fe1a85ec53);
+      x ^= x >> 33;
+      return static_cast<size_t>(x);
+#endif
+    }
   };
 
   auto b = [&](const char *n, auto &m) {
     std::minstd_rand gen(0);
-    std::uniform_int_distribution<int> ud(2, count);
+    std::uniform_int_distribution<key> ud(2, count);
 
     for (size_t i = 0; i < count; ++i) {
-      const int val = ud(gen);
+      const key val = ud(gen);
       m.insert({val, {}});
     }
 
     auto start = steady_clock::now();
     for (size_t i = 0; i < iters; ++i) {
-      const int val = ud(gen);
+      const key val = ud(gen);
       const auto it = m.find(val);
       if (it == m.end()) {
         m.insert({val, {}});
@@ -125,7 +154,7 @@ int main(int argc, char *argv[]) {
 
     nanoseconds max = {};
     for (size_t i = 0; i < iters; ++i) {
-      const int val = ud(gen);
+      const key val = ud(gen);
       auto start = steady_clock::now();
       const auto it = m.find(val);
       if (it == m.end()) {

@@ -99,7 +99,7 @@ public:
   HashMap(size_type bucket_count, key_type empty_key,
           const allocator_type &alloc = allocator_type())
       : empty_key_(empty_key), buckets_(alloc) {
-    size_t pow2 = 1;
+    size_t pow2 = 2;
     while (pow2 < bucket_count) {
       pow2 <<= 1;
     }
