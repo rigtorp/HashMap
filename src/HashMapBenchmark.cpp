@@ -12,11 +12,11 @@
 #include <unistd.h>
 #include <unordered_map>
 
-#if __has_include(<google/dense_hash_map>)
+#if defined(HASHMAP_BENCHMARK_HAS_SPARSEHASH)
 #include <google/dense_hash_map>
 #endif
 
-#if __has_include(<absl/container/flat_hash_map.h>)
+#if defined(HASHMAP_BENCHMARK_HAS_ABSL)
 #include <absl/container/flat_hash_map.h>
 #endif
 
@@ -178,7 +178,7 @@ int main(int argc, char *argv[]) {
     b("HashMap", hm);
   }
 
-#if __has_include(<google/dense_hash_map>)
+#if defined(HASHMAP_BENCHMARK_HAS_SPARSEHASH)
   if (type == -1 || type == 2) {
     // Couldn't get it to work with the huge_page_allocator
     google::dense_hash_map<key, value, hash> hm(count);
@@ -188,7 +188,7 @@ int main(int argc, char *argv[]) {
   }
 #endif
 
-#if __has_include(<absl/container/flat_hash_map.h>)
+#if defined(HASHMAP_BENCHMARK_HAS_ABSL)
   if (type == -1 || type == 3) {
     absl::flat_hash_map<key, value, hash, std::equal_to<>,
                         huge_page_allocator<std::pair<key, value>>>
