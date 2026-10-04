@@ -76,11 +76,51 @@ The rest of the member functions are implemented as for
   hm.erase(1);
 ```
 
+## Build and install
+
+The header-only `HashMap::HashMap` CMake target requires C++14. Configure with
+CMake 3.20 or newer:
+
+```sh
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build --parallel
+ctest --test-dir build --output-on-failure
+cmake --install build --prefix /path/to/install
+```
+
+Standalone builds enable tests and examples, plus the benchmark on Linux and
+macOS. These are disabled by default when included with `add_subdirectory`.
+
+| CMake option | Standalone default | Purpose |
+| --- | --- | --- |
+| `HASHMAP_BUILD_TESTS` | `ON` | Build tests when `BUILD_TESTING` is also enabled |
+| `HASHMAP_BUILD_EXAMPLES` | `ON` | Build the example |
+| `HASHMAP_BUILD_BENCHMARKS` | `ON` on POSIX, `OFF` on Windows | Build the benchmark |
+| `HASHMAP_INSTALL` | `ON` | Generate installation and package files |
+| `HASHMAP_WARNINGS_AS_ERRORS` | `OFF` | Treat warnings in project executables as errors |
+
+To consume an installed package:
+
+```cmake
+find_package(HashMap 1 CONFIG REQUIRED)
+target_link_libraries(my_app PRIVATE HashMap::HashMap)
+```
+
+The same target is available after `add_subdirectory(path/to/HashMap)`.
+Installation respects `CMAKE_INSTALL_INCLUDEDIR` and `CMAKE_INSTALL_LIBDIR`.
+
 ## Benchmark
 
 A benchmark `src/HashMapBenchmark.cpp` is included with the sources. The
 benchmark simulates a delete heavy workload where items are repeatedly inserted
 and deleted.
+
+The benchmark uses `std::chrono::steady_clock` and requires no benchmark
+framework or vendored dependencies. CMake enables comparisons against installed
+Abseil and sparsehash when found. Set `HASHMAP_BENCHMARK_WITH_ABSL=OFF` or
+`HASHMAP_BENCHMARK_WITH_SPARSEHASH=OFF` to disable either comparison. Abseil must
+provide its CMake package; sparsehash must provide `google/dense_hash_map`.
+No dependencies are downloaded during configuration.
 
 The benchmark is built on Linux and macOS; Windows builds the example and tests.
 All containers in a run use the same hash: hardware CRC32 on x86-64 and
