@@ -1,4 +1,3 @@
-#include <functional>
 #include <rigtorp/HashMap.h>
 
 int main() {

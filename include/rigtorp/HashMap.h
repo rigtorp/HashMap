@@ -27,8 +27,6 @@ Disadvantages:
 #include <algorithm>
 #include <cassert>
 #include <cstddef>
-#include <cstdint>
-#include <limits>
 #include <stdexcept>
 #include <vector>
 
