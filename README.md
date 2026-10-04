@@ -112,12 +112,12 @@ When working set is larger than L3 cache (`HashMapBenchmark -c 10000000 -i 10000
 | google::dense_hash_map |          111 |   226083255 |
 | std::unordered_map     |          408 |       22422 |
 
-
 ## Cited by
 
 HashMap has been cited by the following papers:
+
 - Koppl, Dominik. “Separate Chaining Meets Compact Hashing.” (2019).
-  https://arxiv.org/abs/1905.00163 
+  <https://arxiv.org/abs/1905.00163>
 
 ## About
 
