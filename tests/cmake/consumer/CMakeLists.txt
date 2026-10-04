@@ -1,0 +1,28 @@
+cmake_minimum_required(VERSION 3.20)
+project(HashMapConsumer LANGUAGES CXX)
+
+if(HASHMAP_SOURCE_DIR)
+    add_subdirectory("${HASHMAP_SOURCE_DIR}" hashmap)
+    foreach(target HashMapTest HashMapExample HashMapBenchmark)
+        if(TARGET ${target})
+            message(FATAL_ERROR "Embedded HashMap unexpectedly created ${target}")
+        endif()
+    endforeach()
+    if(HASHMAP_INSTALL)
+        message(FATAL_ERROR "Embedded HashMap unexpectedly enabled installation")
+    endif()
+else()
+    find_package(HashMap 1 CONFIG REQUIRED)
+endif()
+
+get_target_property(compile_options HashMap::HashMap INTERFACE_COMPILE_OPTIONS)
+if(compile_options)
+    message(FATAL_ERROR "HashMap leaked executable compiler options: ${compile_options}")
+endif()
+
+add_executable(consumer main.cpp)
+target_link_libraries(consumer PRIVATE HashMap::HashMap)
+set_target_properties(consumer PROPERTIES
+    CXX_STANDARD 14 CXX_STANDARD_REQUIRED ON CXX_EXTENSIONS OFF)
+enable_testing()
+add_test(NAME consumer COMMAND consumer)
