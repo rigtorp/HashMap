@@ -468,6 +468,44 @@ int main(int argc, char *argv[]) {
 
   // Bucket interface
   {
+    // Small maps can hold their first element without growing.
+    for (size_t requested : {0, 1, 2}) {
+      HashMap<int, int> hm(requested, -1);
+      EXPECT(hm.empty());
+      EXPECT(hm.bucket_count() == 2);
+      EXPECT(hm.find(0) == hm.end());
+      hm.emplace(0, 42);
+      EXPECT(hm.bucket_count() == 2);
+      EXPECT(hm.size() == 1);
+      EXPECT(hm.at(0) == 42);
+      hm.reserve(1);
+      EXPECT(hm.bucket_count() == 2);
+      hm.emplace(1, 43);
+      EXPECT(hm.bucket_count() == 4);
+      EXPECT(hm.at(0) == 42);
+      EXPECT(hm.at(1) == 43);
+      EXPECT(hm.erase(0) == 1);
+      EXPECT(hm.at(1) == 43);
+      hm.clear();
+      hm.rehash(0);
+      EXPECT(hm.empty());
+      EXPECT(hm.bucket_count() == 2);
+      hm.emplace(0, 44);
+      EXPECT(hm.bucket_count() == 2);
+      EXPECT(hm.at(0) == 44);
+    }
+  }
+
+  {
+    // Larger requests still round up to the next power of two.
+    for (size_t requested : {3, 4, 5, 8, 9}) {
+      HashMap<int, int> hm(requested, -1);
+      const size_t expected = requested <= 4 ? 4 : requested <= 8 ? 8 : 16;
+      EXPECT(hm.bucket_count() == expected);
+    }
+  }
+
+  {
     // bucket_count()
     HashMap<int, int> hm(16, 0);
     const auto &chm = hm;

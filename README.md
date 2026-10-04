@@ -80,7 +80,12 @@ The rest of the member functions are implemented as for
 
 A benchmark `src/HashMapBenchmark.cpp` is included with the sources. The
 benchmark simulates a delete heavy workload where items are repeatedly inserted
-and deleted. 
+and deleted.
+
+The benchmark is built on Linux and macOS; Windows builds the example and tests.
+All containers in a run use the same hash: hardware CRC32 on x86-64 and
+MurmurHash3's `fmix64` integer mixer on ARM and other architectures. Hash choices
+differ across architectures, so compare containers within the same run.
 
 I ran this benchmark on the following configuration:
 

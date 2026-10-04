@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.6)    
+cmake_minimum_required(VERSION 3.20)
 
 project(HashMap VERSION 1.0 LANGUAGES CXX)
 
@@ -19,15 +19,19 @@ if(CMAKE_CURRENT_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
         add_compile_options(-Wall -Wextra -Wpedantic)
     endif()
 
-    find_package(absl)
+    if(NOT WIN32)
+        find_package(absl)
 
-    add_executable(HashMapBenchmark src/HashMapBenchmark.cpp)
-    target_link_libraries(HashMapBenchmark HashMap)
-    if (absl_FOUND)
-        target_link_libraries(HashMapBenchmark absl::flat_hash_map)
+        add_executable(HashMapBenchmark src/HashMapBenchmark.cpp)
+        target_link_libraries(HashMapBenchmark HashMap)
+        if(absl_FOUND)
+            target_link_libraries(HashMapBenchmark absl::flat_hash_map)
+        endif()
+        if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|AMD64|amd64)$")
+            target_compile_options(HashMapBenchmark PRIVATE -msse4.2)
+        endif()
+        target_compile_features(HashMapBenchmark PRIVATE cxx_std_17)
     endif()
-    target_compile_options(HashMapBenchmark PRIVATE -mavx2)
-    target_compile_features(HashMapBenchmark INTERFACE cxx_std_17)
 
     add_executable(HashMapExample src/HashMapExample.cpp)
     target_link_libraries(HashMapExample HashMap)
@@ -36,7 +40,10 @@ if(CMAKE_CURRENT_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
     target_link_libraries(HashMapTest HashMap)
 
     enable_testing()
-    add_test(HashMapTest HashMapTest)
+    add_test(NAME HashMapTest COMMAND HashMapTest)
+    if(TARGET HashMapBenchmark)
+        add_test(NAME HashMapBenchmarkSmoke COMMAND HashMapBenchmark -t 4 -c 1000 -i 1000)
+    endif()
 endif()
 
 # Install
