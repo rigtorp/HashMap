@@ -40,6 +40,7 @@ jobs:
             flags: ''
     env:
       CXX: ${{ matrix.compiler }}
+      HASHMAP_CXX_FLAGS: ${{ matrix.flags }}
     defaults:
       run:
         shell: bash
@@ -48,12 +49,18 @@ jobs:
         with:
           persist-credentials: false
       - name: Configure
-        run: >-
-          cmake -S . -B build
-          -DCMAKE_BUILD_TYPE=Debug
-          -DCMAKE_CXX_STANDARD=14
-          -DHASHMAP_WARNINGS_AS_ERRORS=ON
-          -DCMAKE_CXX_FLAGS="${{ matrix.flags }}"
+        run: |
+          cmake_args=()
+          if [[ "$RUNNER_OS" != Windows ]]; then
+            cmake_args+=("-DCMAKE_BUILD_TYPE=Debug")
+          fi
+          if [[ -n "$HASHMAP_CXX_FLAGS" ]]; then
+            cmake_args+=("-DCMAKE_CXX_FLAGS=$HASHMAP_CXX_FLAGS")
+          fi
+          cmake -S . -B build \
+            -DCMAKE_CXX_STANDARD=14 \
+            -DHASHMAP_WARNINGS_AS_ERRORS=ON \
+            "${cmake_args[@]}"
       - name: Build
         run: cmake --build build --config Debug --parallel 2
       - name: Test
