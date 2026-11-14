@@ -26,12 +26,17 @@ Disadvantages:
 
 #include <algorithm>
 #include <cstddef>
+#include <cstdint>
 #include <iterator>
 #include <memory>
 #include <stdexcept>
 #include <type_traits>
 #include <utility>
 #include <vector>
+
+#if defined(_MSC_VER) && (defined(_M_X64) || defined(_M_ARM64))
+#include <intrin.h>
+#endif
 
 namespace rigtorp {
 
@@ -58,21 +63,33 @@ template <typename Hash>
 inline constexpr bool is_avalanching_v =
     requires { typename Hash::is_avalanching; };
 
-constexpr size_t mix_hash(size_t h) noexcept {
+inline size_t mix_hash(size_t h) noexcept {
   if constexpr (sizeof(size_t) >= 8) {
-    h ^= h >> 33;
-    h *= 0xff51afd7ed558ccdULL;
-    h ^= h >> 33;
-    h *= 0xc4ceb9fe1a85ec53ULL;
-    h ^= h >> 33;
+#if defined(__SIZEOF_INT128__)
+    __extension__ using uint128_t = unsigned __int128;
+    const uint128_t r =
+        static_cast<uint128_t>(h) * UINT64_C(0x9ddfea08eb382d69);
+    return static_cast<size_t>(r) ^ static_cast<size_t>(r >> 64);
+#elif defined(_MSC_VER) && (defined(_M_X64) || defined(_M_ARM64))
+    unsigned __int64 hi = 0;
+    const unsigned __int64 lo = _umul128(h, 0x9ddfea08eb382d69ULL, &hi);
+    return static_cast<size_t>(lo ^ hi);
+#else
+    h ^= h >> 30;
+    h *= 0xbf58476d1ce4e5b9ULL;
+    h ^= h >> 27;
+    h *= 0x94d049bb133111ebULL;
+    h ^= h >> 31;
+    return h;
+#endif
   } else {
     h ^= h >> 16;
     h *= 0x85ebca6bU;
     h ^= h >> 13;
     h *= 0xc2b2ae35U;
     h ^= h >> 16;
+    return h;
   }
-  return h;
 }
 } // namespace detail
 

@@ -1,11 +1,6 @@
 // © 2017-2020 Erik Rigtorp <erik@rigtorp.se>
 // SPDX-License-Identifier: MIT
 
-#if defined(HASHMAP_BENCHMARK_HAS_SPARSEHASH) &&                               \
-    (defined(__x86_64__) || defined(_M_X64))
-#include <nmmintrin.h> // _mm_crc32_u64
-#endif
-
 #include <chrono>
 #include <cstdint>
 #include <iostream>
@@ -122,19 +117,7 @@ int main(int argc, char *argv[]) {
 #if defined(HASHMAP_BENCHMARK_HAS_SPARSEHASH)
   struct hash {
     size_t operator()(size_t h) const noexcept {
-#if defined(__x86_64__) || defined(_M_X64)
-      return _mm_crc32_u64(0, h);
-#else
-      // MurmurHash3's public-domain fmix64 finalizer, by Austin Appleby:
-      // https://github.com/aappleby/smhasher/blob/master/src/MurmurHash3.cpp
-      uint64_t x = h;
-      x ^= x >> 33;
-      x *= UINT64_C(0xff51afd7ed558ccd);
-      x ^= x >> 33;
-      x *= UINT64_C(0xc4ceb9fe1a85ec53);
-      x ^= x >> 33;
-      return static_cast<size_t>(x);
-#endif
+      return rigtorp::detail::mix_hash(std::hash<key>{}(h));
     }
   };
 #endif

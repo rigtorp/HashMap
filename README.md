@@ -119,9 +119,8 @@ downloaded during configuration.
 
 The benchmark is built on Linux and macOS; Windows builds the example and tests.
 Each container uses its default hash (`HashMap` automatically mixes hashes that
-do not define `is_avalanching`), except `google::dense_hash_map`, which uses an
-explicit mixer (hardware CRC32 on x86-64 or MurmurHash3's `fmix64` on other
-architectures).
+do not define `is_avalanching`), and `google::dense_hash_map` uses `HashMap`'s
+mixer.
 
 I ran this benchmark on the following configuration:
 
