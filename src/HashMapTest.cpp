@@ -3,7 +3,10 @@
 
 #include <algorithm>
 #include <array>
+#include <iterator>
+#include <ranges>
 #include <string>
+#include <type_traits>
 
 #include <rigtorp/HashMap.h>
 
@@ -569,6 +572,63 @@ int main(int argc, char *argv[]) {
     EXPECT(throws_invalid_arg([&]() { hm.at(0); }));
     EXPECT(throws_invalid_arg([&]() { chm.at(0); }));
     EXPECT(throws_invalid_arg([&]() { hm.erase(0); }));
+  }
+
+  // C++20 iterator/range concepts, erase(const_iterator), operator[](&&),
+  // clear()
+  {
+    using Map = HashMap<int, int>;
+    static_assert(std::forward_iterator<Map::iterator>);
+    static_assert(std::forward_iterator<Map::const_iterator>);
+    static_assert(std::ranges::forward_range<Map>);
+    static_assert(std::ranges::forward_range<const Map>);
+    static_assert(std::is_convertible_v<Map::iterator, Map::const_iterator>);
+    static_assert(!std::is_convertible_v<Map::const_iterator, Map::iterator>);
+    static_assert(std::is_same_v<Map::pointer, Map::value_type *>);
+    static_assert(std::is_same_v<Map::const_pointer, const Map::value_type *>);
+
+    Map::iterator default_it;
+    Map::iterator default_it2;
+    EXPECT(default_it == default_it2);
+
+    Map hm(16, 0);
+    EXPECT(default_it == hm.end());
+    EXPECT(hm.cbegin() == Map::const_iterator());
+    hm[1] = 10;
+    hm[2] = 20;
+    auto it = hm.begin();
+    auto prev = it++;
+    EXPECT(prev != it);
+    EXPECT(it != hm.end());
+
+    hm.erase(hm.cbegin());
+    EXPECT(hm.size() == 1);
+
+    HashMap<std::string, int> sm(16, "");
+    std::string k = "hello";
+    sm[std::move(k)] = 42;
+    EXPECT(sm["hello"] == 42);
+  }
+
+  // clear() uses key_equal rather than operator!=
+  {
+    struct CustomKey {
+      int id = 0;
+    };
+    struct CustomHash {
+      size_t operator()(const CustomKey &k) const {
+        return std::hash<int>{}(k.id);
+      }
+    };
+    struct CustomEqual {
+      bool operator()(const CustomKey &a, const CustomKey &b) const {
+        return a.id == b.id;
+      }
+    };
+    HashMap<CustomKey, int, CustomHash, CustomEqual> cm(16, CustomKey{0});
+    cm.emplace(CustomKey{1}, 10);
+    cm.clear();
+    EXPECT(cm.empty());
   }
 
   if (!ok) {
