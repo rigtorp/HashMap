@@ -26,7 +26,7 @@ main differences are:
 - A key value to represent the empty key is required.
 - `Key` and `T` needs to be default constructible.
 - Iterators are invalidated on all modifying operations.
-- It's invalid to perform any operations with the empty key.
+- Performing operations with the empty key throws `std::invalid_argument`.
 - Destructors are not called on `erase`.
 - Extensions for lookups using related key types.
 

@@ -546,6 +546,31 @@ int main(int argc, char *argv[]) {
     EXPECT(chm.bucket_count() == 32);
   }
 
+  // Empty key throws std::invalid_argument
+  {
+    HashMap<int, int> hm(16, 0);
+    const auto &chm = hm;
+    auto throws_invalid_arg = [](auto &&fn) {
+      try {
+        fn();
+      } catch (const std::invalid_argument &) {
+        return true;
+      } catch (...) {
+        return false;
+      }
+      return false;
+    };
+    EXPECT(throws_invalid_arg([&]() { hm.insert({0, 1}); }));
+    EXPECT(throws_invalid_arg([&]() { hm.emplace(0, 1); }));
+    EXPECT(throws_invalid_arg([&]() { hm[0] = 1; }));
+    EXPECT(throws_invalid_arg([&]() { hm.find(0); }));
+    EXPECT(throws_invalid_arg([&]() { chm.find(0); }));
+    EXPECT(throws_invalid_arg([&]() { hm.count(0); }));
+    EXPECT(throws_invalid_arg([&]() { hm.at(0); }));
+    EXPECT(throws_invalid_arg([&]() { chm.at(0); }));
+    EXPECT(throws_invalid_arg([&]() { hm.erase(0); }));
+  }
+
   if (!ok) {
     fprintf(stderr, "FAILED!\n");
   }
