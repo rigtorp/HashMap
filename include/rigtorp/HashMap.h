@@ -27,12 +27,17 @@ Disadvantages:
 #include <algorithm>
 #include <bit>
 #include <cstddef>
+#include <cstdint>
 #include <iterator>
 #include <memory>
 #include <stdexcept>
 #include <type_traits>
 #include <utility>
 #include <vector>
+
+#if defined(_MSC_VER) && (defined(_M_X64) || defined(_M_ARM64))
+#include <intrin.h>
+#endif
 
 namespace rigtorp {
 
@@ -54,6 +59,39 @@ namespace detail {
 }
 
 #undef RIGTORP_HASHMAP_NOINLINE
+
+template <typename Hash>
+inline constexpr bool is_avalanching_v =
+    requires { typename Hash::is_avalanching; };
+
+inline size_t mix_hash(size_t h) noexcept {
+  if constexpr (sizeof(size_t) >= 8) {
+#if defined(__SIZEOF_INT128__)
+    __extension__ using uint128_t = unsigned __int128;
+    const uint128_t r =
+        static_cast<uint128_t>(h) * UINT64_C(0x9ddfea08eb382d69);
+    return static_cast<size_t>(r) ^ static_cast<size_t>(r >> 64);
+#elif defined(_MSC_VER) && (defined(_M_X64) || defined(_M_ARM64))
+    unsigned __int64 hi = 0;
+    const unsigned __int64 lo = _umul128(h, 0x9ddfea08eb382d69ULL, &hi);
+    return static_cast<size_t>(lo ^ hi);
+#else
+    h ^= h >> 30;
+    h *= 0xbf58476d1ce4e5b9ULL;
+    h ^= h >> 27;
+    h *= 0x94d049bb133111ebULL;
+    h ^= h >> 31;
+    return h;
+#endif
+  } else {
+    h ^= h >> 16;
+    h *= 0x85ebca6bU;
+    h ^= h >> 13;
+    h *= 0xc2b2ae35U;
+    h ^= h >> 16;
+    return h;
+  }
+}
 } // namespace detail
 
 template <typename Key, typename T, typename Hash = std::hash<Key>,
@@ -348,8 +386,12 @@ private:
 
   template <typename K>
   size_t key_to_idx(const K &key) const noexcept(noexcept(hasher()(key))) {
+    size_t h = hasher()(key);
+    if constexpr (!detail::is_avalanching_v<hasher>) {
+      h = detail::mix_hash(h);
+    }
     const size_t mask = buckets_.size() - 1;
-    return hasher()(key) & mask;
+    return h & mask;
   }
 
   size_t probe_next(size_t idx) const noexcept {
