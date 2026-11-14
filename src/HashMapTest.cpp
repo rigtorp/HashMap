@@ -12,11 +12,11 @@ using namespace rigtorp;
 static bool ok = true;
 
 #define EXPECT(expr)                                                           \
-  ([](bool res) {                                                              \
-    if (!res) {                                                                \
+  ([](bool expect_res) {                                                       \
+    if (!expect_res) {                                                         \
       fprintf(stdout, "FAILED %s:%i: %s\n", __FILE__, __LINE__, #expr);        \
     }                                                                          \
-    ok = ok && res;                                                            \
+    ok = ok && expect_res;                                                     \
   }(static_cast<bool>(expr)))
 #define THROWS(expr)                                                           \
   ([&]() {                                                                     \
@@ -29,8 +29,10 @@ static bool ok = true;
   }())
 
 struct Hash {
-  size_t operator()(int v) { return v * 7; }
-  size_t operator()(const std::string &v) { return std::stoi(v) * 7; }
+  size_t operator()(int v) { return static_cast<size_t>(v) * 7; }
+  size_t operator()(const std::string &v) {
+    return static_cast<size_t>(std::stoi(v)) * 7;
+  }
 };
 
 struct Equal {
@@ -230,11 +232,11 @@ int main(int argc, char *argv[]) {
 
     std::array<bool, 100> visited = {};
     for (auto it = hm.begin(); it != hm.end(); ++it) {
-      visited[it->first] = true;
+      visited[static_cast<size_t>(it->first)] = true;
     }
 
     for (int i = 1; i < 100; ++i) {
-      EXPECT(visited[i]);
+      EXPECT(visited[static_cast<size_t>(i)]);
     }
 
     // Test for iterator traits
@@ -469,7 +471,7 @@ int main(int argc, char *argv[]) {
   // Bucket interface
   {
     // Small maps can hold their first element without growing.
-    for (size_t requested : {0, 1, 2}) {
+    for (size_t requested : {size_t{0}, size_t{1}, size_t{2}}) {
       HashMap<int, int> hm(requested, -1);
       EXPECT(hm.empty());
       EXPECT(hm.bucket_count() == 2);
@@ -498,7 +500,8 @@ int main(int argc, char *argv[]) {
 
   {
     // Larger requests still round up to the next power of two.
-    for (size_t requested : {3, 4, 5, 8, 9}) {
+    for (size_t requested :
+         {size_t{3}, size_t{4}, size_t{5}, size_t{8}, size_t{9}}) {
       HashMap<int, int> hm(requested, -1);
       const size_t expected = requested <= 4 ? 4 : requested <= 8 ? 8 : 16;
       EXPECT(hm.bucket_count() == expected);

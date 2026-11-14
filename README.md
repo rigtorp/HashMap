@@ -79,7 +79,7 @@ The rest of the member functions are implemented as for
 ## Build and install
 
 The header-only `HashMap::HashMap` CMake target requires C++14. Configure with
-CMake 3.20 or newer:
+CMake 3.24 or newer:
 
 ```sh
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
@@ -89,15 +89,8 @@ cmake --install build --prefix /path/to/install
 ```
 
 Standalone builds enable tests and examples, plus the benchmark on Linux and
-macOS. These are disabled by default when included with `add_subdirectory`.
-
-| CMake option | Standalone default | Purpose |
-| --- | --- | --- |
-| `HASHMAP_BUILD_TESTS` | `ON` | Build tests when `BUILD_TESTING` is also enabled |
-| `HASHMAP_BUILD_EXAMPLES` | `ON` | Build the example |
-| `HASHMAP_BUILD_BENCHMARKS` | `ON` on POSIX, `OFF` on Windows | Build the benchmark |
-| `HASHMAP_INSTALL` | `ON` | Generate installation and package files |
-| `HASHMAP_WARNINGS_AS_ERRORS` | `OFF` | Treat warnings in project executables as errors |
+macOS. These are disabled by default when included with `add_subdirectory` or
+when `BUILD_TESTING=OFF`.
 
 To consume an installed package:
 

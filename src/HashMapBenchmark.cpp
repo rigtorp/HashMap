@@ -86,10 +86,10 @@ int main(int argc, char *argv[]) {
   while ((opt = getopt(argc, argv, "i:c:t:")) != -1) {
     switch (opt) {
     case 'i':
-      iters = std::stol(optarg);
+      iters = std::stoul(optarg);
       break;
     case 'c':
-      count = std::stol(optarg);
+      count = std::stoul(optarg);
       break;
     case 't':
       type = std::stoi(optarg);
@@ -155,19 +155,20 @@ int main(int argc, char *argv[]) {
     nanoseconds max = {};
     for (size_t i = 0; i < iters; ++i) {
       const key val = ud(gen);
-      auto start = steady_clock::now();
+      auto iter_start = steady_clock::now();
       const auto it = m.find(val);
       if (it == m.end()) {
         m.insert({val, {}});
       } else {
         m.erase(it);
       }
-      auto stop = steady_clock::now();
-      max = std::max(max, stop - start);
+      auto iter_stop = steady_clock::now();
+      max = std::max(max, iter_stop - iter_start);
     }
 
     std::cout << n << ": mean "
-              << duration_cast<nanoseconds>(duration).count() / iters
+              << duration_cast<nanoseconds>(duration).count() /
+                     static_cast<nanoseconds::rep>(iters)
               << " ns/iter, max " << max.count() << " ns/iter" << std::endl;
   };
 

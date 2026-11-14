@@ -13,8 +13,10 @@ int main(int argc, char *argv[]) {
 
   // Hash for using std::string as lookup key
   struct Hash {
-    size_t operator()(int v) { return v * 7; }
-    size_t operator()(const std::string &v) { return std::stoi(v) * 7; }
+    size_t operator()(int v) { return static_cast<size_t>(v) * 7; }
+    size_t operator()(const std::string &v) {
+      return static_cast<size_t>(std::stoi(v)) * 7;
+    }
   };
 
   // Equal comparison for using std::string as lookup key

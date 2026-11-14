@@ -1,111 +1,106 @@
-cmake_minimum_required(VERSION 3.20)
+cmake_minimum_required(VERSION 3.24...4.3)
 
-project(HashMap VERSION 1.0.0 LANGUAGES CXX)
+project(HashMap
+  VERSION 1.0.0
+  HOMEPAGE_URL "https://github.com/rigtorp/HashMap"
+  LANGUAGES CXX
+)
 
-include(GNUInstallDirs)
-include(CMakePackageConfigHelpers)
-
-set(HASHMAP_TOP_LEVEL OFF)
-if(CMAKE_CURRENT_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
-    set(HASHMAP_TOP_LEVEL ON)
-endif()
-
-option(HASHMAP_BUILD_TESTS "Build HashMap tests" ${HASHMAP_TOP_LEVEL})
-option(HASHMAP_BUILD_EXAMPLES "Build HashMap examples" ${HASHMAP_TOP_LEVEL})
-set(HASHMAP_BENCHMARK_DEFAULT ${HASHMAP_TOP_LEVEL})
-if(WIN32)
-    set(HASHMAP_BENCHMARK_DEFAULT OFF)
-endif()
-option(HASHMAP_BUILD_BENCHMARKS "Build the POSIX benchmark" ${HASHMAP_BENCHMARK_DEFAULT})
-option(HASHMAP_INSTALL "Generate HashMap install rules" ${HASHMAP_TOP_LEVEL})
-option(HASHMAP_WARNINGS_AS_ERRORS "Treat HashMap executable warnings as errors" OFF)
-
+# -----------------------------------------------------------------------------
+# Library Target
+# -----------------------------------------------------------------------------
 add_library(HashMap INTERFACE)
 add_library(HashMap::HashMap ALIAS HashMap)
 target_compile_features(HashMap INTERFACE cxx_std_14)
-target_include_directories(HashMap INTERFACE
-    "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
-    "$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>")
+target_sources(HashMap INTERFACE
+  FILE_SET HEADERS
+  BASE_DIRS include
+  FILES include/rigtorp/HashMap.h
+)
 
-function(hashmap_executable target source)
+# -----------------------------------------------------------------------------
+# Tests, Examples & Benchmarks (Top-Level Only)
+# -----------------------------------------------------------------------------
+include(CTest)
+
+if(PROJECT_IS_TOP_LEVEL AND BUILD_TESTING)
+  function(hashmap_executable target source)
     add_executable(${target} ${source})
     target_link_libraries(${target} PRIVATE HashMap::HashMap)
-    set_target_properties(${target} PROPERTIES CXX_EXTENSIONS OFF)
-    if(MSVC)
-        target_compile_options(${target} PRIVATE /permissive- /W4)
-        if(HASHMAP_WARNINGS_AS_ERRORS)
-            target_compile_options(${target} PRIVATE /WX)
-        endif()
-    elseif(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
-        target_compile_options(${target} PRIVATE -Wall -Wextra -Wpedantic)
-        if(HASHMAP_WARNINGS_AS_ERRORS)
-            target_compile_options(${target} PRIVATE -Werror)
-        endif()
-    endif()
-endfunction()
+    set_target_properties(${target} PROPERTIES
+      CXX_EXTENSIONS OFF
+      COMPILE_WARNING_AS_ERROR ON
+    )
+    target_compile_options(${target} PRIVATE
+      "$<$<CXX_COMPILER_ID:MSVC>:/permissive-;/W4;/w14242>"
+      "$<$<CXX_COMPILER_ID:GNU,Clang,AppleClang>:-Wall;-Wextra;-Wpedantic;-Wshadow;-Wconversion;-Wsign-conversion;-Wold-style-cast;-Wundef>"
+    )
+  endfunction()
 
-if(HASHMAP_BUILD_TESTS)
-    include(CTest)
-    if(BUILD_TESTING)
-        hashmap_executable(HashMapTest src/HashMapTest.cpp)
-        add_test(NAME HashMapTest COMMAND HashMapTest)
-    endif()
-endif()
+  hashmap_executable(HashMapExample src/HashMapExample.cpp)
 
-if(HASHMAP_BUILD_EXAMPLES)
-    hashmap_executable(HashMapExample src/HashMapExample.cpp)
-endif()
+  hashmap_executable(HashMapTest src/HashMapTest.cpp)
+  add_test(NAME HashMapTest COMMAND HashMapTest)
 
-if(HASHMAP_BUILD_BENCHMARKS)
-    if(WIN32)
-        message(FATAL_ERROR "HashMapBenchmark requires POSIX; disable HASHMAP_BUILD_BENCHMARKS on Windows")
-    endif()
-
-    option(HASHMAP_BENCHMARK_WITH_ABSL "Use installed Abseil when available" ON)
-    option(HASHMAP_BENCHMARK_WITH_SPARSEHASH "Use installed sparsehash when available" ON)
+  if(NOT WIN32)
     hashmap_executable(HashMapBenchmark src/HashMapBenchmark.cpp)
     target_compile_features(HashMapBenchmark PRIVATE cxx_std_17)
     if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|AMD64|amd64)$")
-        target_compile_options(HashMapBenchmark PRIVATE -msse4.2)
+      target_compile_options(HashMapBenchmark PRIVATE -msse4.2)
     endif()
 
+    option(HASHMAP_BENCHMARK_WITH_ABSL "Use installed Abseil when available" ON)
     if(HASHMAP_BENCHMARK_WITH_ABSL)
-        find_package(absl CONFIG QUIET)
-        if(TARGET absl::flat_hash_map)
-            target_link_libraries(HashMapBenchmark PRIVATE absl::flat_hash_map)
-            target_compile_definitions(HashMapBenchmark PRIVATE HASHMAP_BENCHMARK_HAS_ABSL)
-        endif()
+      find_package(absl CONFIG QUIET)
+      if(TARGET absl::flat_hash_map)
+        target_link_libraries(HashMapBenchmark PRIVATE absl::flat_hash_map)
+        target_compile_definitions(HashMapBenchmark PRIVATE HASHMAP_BENCHMARK_HAS_ABSL)
+      endif()
     endif()
+
+    option(HASHMAP_BENCHMARK_WITH_SPARSEHASH "Use installed sparsehash when available" ON)
     if(HASHMAP_BENCHMARK_WITH_SPARSEHASH)
-        find_path(HASHMAP_SPARSEHASH_INCLUDE_DIR NAMES google/dense_hash_map)
-        mark_as_advanced(HASHMAP_SPARSEHASH_INCLUDE_DIR)
-        if(HASHMAP_SPARSEHASH_INCLUDE_DIR)
-            target_include_directories(HashMapBenchmark SYSTEM PRIVATE "${HASHMAP_SPARSEHASH_INCLUDE_DIR}")
-            target_compile_definitions(HashMapBenchmark PRIVATE HASHMAP_BENCHMARK_HAS_SPARSEHASH)
-        endif()
+      find_path(HASHMAP_SPARSEHASH_INCLUDE_DIR NAMES google/dense_hash_map)
+      mark_as_advanced(HASHMAP_SPARSEHASH_INCLUDE_DIR)
+      if(HASHMAP_SPARSEHASH_INCLUDE_DIR)
+        target_include_directories(HashMapBenchmark SYSTEM PRIVATE "${HASHMAP_SPARSEHASH_INCLUDE_DIR}")
+        target_compile_definitions(HashMapBenchmark PRIVATE HASHMAP_BENCHMARK_HAS_SPARSEHASH)
+      endif()
     endif()
-    if(HASHMAP_BUILD_TESTS AND BUILD_TESTING)
-        add_test(NAME HashMapBenchmarkSmoke COMMAND HashMapBenchmark -t 4 -c 1000 -i 1000)
-    endif()
+
+    add_test(NAME HashMapBenchmarkSmoke COMMAND HashMapBenchmark -t 4 -c 1000 -i 1000)
+  endif()
 endif()
 
-if(HASHMAP_INSTALL)
-    set(HASHMAP_INSTALL_CMAKEDIR "${CMAKE_INSTALL_LIBDIR}/cmake/HashMap")
-    configure_package_config_file(cmake/HashMapConfig.cmake.in
-        "${CMAKE_CURRENT_BINARY_DIR}/HashMapConfig.cmake"
-        INSTALL_DESTINATION "${HASHMAP_INSTALL_CMAKEDIR}")
-    write_basic_package_version_file("${CMAKE_CURRENT_BINARY_DIR}/HashMapConfigVersion.cmake"
-        VERSION ${PROJECT_VERSION}
-        COMPATIBILITY SameMajorVersion
-        ARCH_INDEPENDENT)
+# -----------------------------------------------------------------------------
+# Installation & Package Export
+# -----------------------------------------------------------------------------
+if(PROJECT_IS_TOP_LEVEL)
+  include(GNUInstallDirs)
+  include(CMakePackageConfigHelpers)
 
-    install(TARGETS HashMap EXPORT HashMapTargets)
-    install(DIRECTORY include/ DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}")
-    install(EXPORT HashMapTargets FILE HashMapTargets.cmake
-        NAMESPACE HashMap:: DESTINATION "${HASHMAP_INSTALL_CMAKEDIR}")
-    install(FILES "${CMAKE_CURRENT_BINARY_DIR}/HashMapConfig.cmake"
-        "${CMAKE_CURRENT_BINARY_DIR}/HashMapConfigVersion.cmake"
-        DESTINATION "${HASHMAP_INSTALL_CMAKEDIR}")
-    export(EXPORT HashMapTargets FILE "${CMAKE_CURRENT_BINARY_DIR}/HashMapTargets.cmake"
-        NAMESPACE HashMap::)
+  export(
+    TARGETS HashMap
+    NAMESPACE HashMap::
+    FILE HashMapConfig.cmake
+  )
+
+  write_basic_package_version_file(
+    "${CMAKE_CURRENT_BINARY_DIR}/HashMapConfigVersion.cmake"
+    COMPATIBILITY SameMajorVersion
+    ARCH_INDEPENDENT
+  )
+
+  install(TARGETS HashMap EXPORT HashMapConfig FILE_SET HEADERS)
+
+  install(
+    EXPORT HashMapConfig
+    NAMESPACE HashMap::
+    DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/HashMap"
+  )
+
+  install(
+    FILES "${CMAKE_CURRENT_BINARY_DIR}/HashMapConfigVersion.cmake"
+    DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/HashMap"
+  )
 endif()
