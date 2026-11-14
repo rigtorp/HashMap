@@ -25,6 +25,7 @@ Disadvantages:
 #pragma once
 
 #include <algorithm>
+#include <bit>
 #include <cstddef>
 #include <iterator>
 #include <memory>
@@ -136,10 +137,7 @@ public:
   HashMap(size_type bucket_count, key_type empty_key,
           const allocator_type &alloc = allocator_type())
       : empty_key_(empty_key), buckets_(alloc) {
-    size_t pow2 = 2;
-    while (pow2 < bucket_count) {
-      pow2 <<= 1;
-    }
+    size_t pow2 = std::bit_ceil(std::max<size_t>(bucket_count, 2));
     buckets_.resize(pow2, std::make_pair(empty_key_, T()));
   }
 
