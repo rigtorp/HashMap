@@ -53,6 +53,27 @@ namespace detail {
 }
 
 #undef RIGTORP_HASHMAP_NOINLINE
+
+template <typename Hash>
+inline constexpr bool is_avalanching_v =
+    requires { typename Hash::is_avalanching; };
+
+constexpr size_t mix_hash(size_t h) noexcept {
+  if constexpr (sizeof(size_t) >= 8) {
+    h ^= h >> 33;
+    h *= 0xff51afd7ed558ccdULL;
+    h ^= h >> 33;
+    h *= 0xc4ceb9fe1a85ec53ULL;
+    h ^= h >> 33;
+  } else {
+    h ^= h >> 16;
+    h *= 0x85ebca6bU;
+    h ^= h >> 13;
+    h *= 0xc2b2ae35U;
+    h ^= h >> 16;
+  }
+  return h;
+}
 } // namespace detail
 
 template <typename Key, typename T, typename Hash = std::hash<Key>,
@@ -350,8 +371,12 @@ private:
 
   template <typename K>
   size_t key_to_idx(const K &key) const noexcept(noexcept(hasher()(key))) {
+    size_t h = hasher()(key);
+    if constexpr (!detail::is_avalanching_v<hasher>) {
+      h = detail::mix_hash(h);
+    }
     const size_t mask = buckets_.size() - 1;
-    return hasher()(key) & mask;
+    return h & mask;
   }
 
   size_t probe_next(size_t idx) const noexcept {

@@ -631,6 +631,24 @@ int main(int argc, char *argv[]) {
     EXPECT(cm.empty());
   }
 
+  // is_avalanching hash trait
+  {
+    struct AvalanchingHash {
+      using is_avalanching = void;
+      size_t operator()(int v) const noexcept {
+        return static_cast<size_t>(v) * size_t{2654435761};
+      }
+    };
+    static_assert(detail::is_avalanching_v<AvalanchingHash>);
+    static_assert(!detail::is_avalanching_v<std::hash<int>>);
+
+    HashMap<int, int, AvalanchingHash> am(16, 0);
+    am[1] = 100;
+    am[2] = 200;
+    EXPECT(am.at(1) == 100);
+    EXPECT(am.at(2) == 200);
+  }
+
   if (!ok) {
     fprintf(stderr, "FAILED!\n");
   }

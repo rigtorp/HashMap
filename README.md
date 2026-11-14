@@ -118,9 +118,10 @@ Boost must provide `boost/unordered/unordered_flat_map.hpp`. No dependencies are
 downloaded during configuration.
 
 The benchmark is built on Linux and macOS; Windows builds the example and tests.
-All containers in a run use the same hash: hardware CRC32 on x86-64 and
-MurmurHash3's `fmix64` integer mixer on ARM and other architectures. Hash choices
-differ across architectures, so compare containers within the same run.
+Each container uses its default hash (`HashMap` automatically mixes hashes that
+do not define `is_avalanching`), except `google::dense_hash_map`, which uses an
+explicit mixer (hardware CRC32 on x86-64 or MurmurHash3's `fmix64` on other
+architectures).
 
 I ran this benchmark on the following configuration:
 

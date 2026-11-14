@@ -1,7 +1,8 @@
 // © 2017-2020 Erik Rigtorp <erik@rigtorp.se>
 // SPDX-License-Identifier: MIT
 
-#if defined(__x86_64__) || defined(_M_X64)
+#if defined(HASHMAP_BENCHMARK_HAS_SPARSEHASH) &&                               \
+    (defined(__x86_64__) || defined(_M_X64))
 #include <nmmintrin.h> // _mm_crc32_u64
 #endif
 
@@ -106,9 +107,10 @@ int main(int argc, char *argv[]) {
 
   if (optind != argc) {
   usage:
-    std::cerr << "HashMapBenchmark © 2020 Erik Rigtorp <erik@rigtorp.se>\n"
-                 "usage: HashMapBenchmark [-c count] [-i iters] [-t 1|2|3|4]\n"
-              << std::endl;
+    std::cerr
+        << "HashMapBenchmark © 2020 Erik Rigtorp <erik@rigtorp.se>\n"
+           "usage: HashMapBenchmark [-c count] [-i iters] [-t 1|2|3|4|5|6]\n"
+        << std::endl;
     exit(1);
   }
 
@@ -117,6 +119,7 @@ int main(int argc, char *argv[]) {
     char buf[24];
   };
 
+#if defined(HASHMAP_BENCHMARK_HAS_SPARSEHASH)
   struct hash {
     size_t operator()(size_t h) const noexcept {
 #if defined(__x86_64__) || defined(_M_X64)
@@ -134,6 +137,7 @@ int main(int argc, char *argv[]) {
 #endif
     }
   };
+#endif
 
   auto b = [&](const char *n, auto &m) {
     std::minstd_rand gen(0);
@@ -178,7 +182,7 @@ int main(int argc, char *argv[]) {
   };
 
   if (type == -1 || type == 1) {
-    HashMap<key, value, hash, std::equal_to<>,
+    HashMap<key, value, std::hash<key>, std::equal_to<>,
             huge_page_allocator<std::pair<key, value>>>
         hm(2 * count, 0);
     b("HashMap", hm);
@@ -196,8 +200,8 @@ int main(int argc, char *argv[]) {
 
 #if defined(HASHMAP_BENCHMARK_HAS_ABSL)
   if (type == -1 || type == 3) {
-    absl::flat_hash_map<key, value, hash, std::equal_to<>,
-                        huge_page_allocator<std::pair<key, value>>>
+    absl::flat_hash_map<key, value, absl::Hash<key>, std::equal_to<>,
+                        huge_page_allocator<std::pair<const key, value>>>
         hm;
     hm.reserve(count);
     b("absl::flat_hash_map", hm);
@@ -205,14 +209,14 @@ int main(int argc, char *argv[]) {
 #endif
 
   if (type == -1 || type == 4) {
-    std::unordered_map<key, value, hash> hm;
+    std::unordered_map<key, value> hm;
     hm.reserve(count);
     b("std::unordered_map", hm);
   }
 
 #if defined(HASHMAP_BENCHMARK_HAS_BOOST)
   if (type == -1 || type == 5) {
-    boost::unordered_flat_map<key, value, hash, std::equal_to<>,
+    boost::unordered_flat_map<key, value, boost::hash<key>, std::equal_to<>,
                               huge_page_allocator<std::pair<const key, value>>>
         hm;
     hm.reserve(count);
@@ -220,7 +224,7 @@ int main(int argc, char *argv[]) {
   }
 
   if (type == -1 || type == 6) {
-    boost::unordered_map<key, value, hash> hm;
+    boost::unordered_map<key, value> hm;
     hm.reserve(count);
     b("boost::unordered_map", hm);
   }
