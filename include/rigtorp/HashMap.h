@@ -26,7 +26,11 @@ Disadvantages:
 
 #include <algorithm>
 #include <cstddef>
+#include <iterator>
+#include <memory>
 #include <stdexcept>
+#include <type_traits>
+#include <utility>
 #include <vector>
 
 namespace rigtorp {
@@ -65,6 +69,9 @@ public:
   using allocator_type = Allocator;
   using reference = value_type &;
   using const_reference = const value_type &;
+  using pointer = typename std::allocator_traits<allocator_type>::pointer;
+  using const_pointer =
+      typename std::allocator_traits<allocator_type>::const_pointer;
   using buckets = std::vector<value_type, allocator_type>;
 
   template <typename ContT, typename IterVal> struct hm_iterator {
@@ -74,11 +81,10 @@ public:
     using reference = value_type &;
     using iterator_category = std::forward_iterator_tag;
 
+    hm_iterator() = default;
+
     bool operator==(const hm_iterator &other) const {
       return other.hm_ == hm_ && other.idx_ == idx_;
-    }
-    bool operator!=(const hm_iterator &other) const {
-      return !(other == *this);
     }
 
     hm_iterator &operator++() {
@@ -87,26 +93,40 @@ public:
       return *this;
     }
 
+    hm_iterator operator++(int) {
+      auto tmp = *this;
+      ++(*this);
+      return tmp;
+    }
+
     reference operator*() const { return hm_->buckets_[idx_]; }
     pointer operator->() const { return &hm_->buckets_[idx_]; }
+
+    template <typename OtherContT, typename OtherIterVal>
+      requires std::is_convertible_v<OtherContT *, ContT *> &&
+                   std::is_convertible_v<OtherIterVal *, IterVal *>
+    hm_iterator(const hm_iterator<OtherContT, OtherIterVal> &other)
+        : hm_(other.hm_), idx_(other.idx_) {}
 
   private:
     explicit hm_iterator(ContT *hm) : hm_(hm) { advance_past_empty(); }
     explicit hm_iterator(ContT *hm, size_type idx) : hm_(hm), idx_(idx) {}
-    template <typename OtherContT, typename OtherIterVal>
-    hm_iterator(const hm_iterator<OtherContT, OtherIterVal> &other)
-        : hm_(other.hm_), idx_(other.idx_) {}
 
     void advance_past_empty() {
       while (idx_ < hm_->buckets_.size() &&
              key_equal()(hm_->buckets_[idx_].first, hm_->empty_key_)) {
         ++idx_;
       }
+      if (idx_ == hm_->buckets_.size()) {
+        hm_ = nullptr;
+        idx_ = 0;
+      }
     }
 
     ContT *hm_ = nullptr;
     typename ContT::size_type idx_ = 0;
     friend ContT;
+    template <typename, typename> friend struct hm_iterator;
   };
 
   using iterator = hm_iterator<HashMap, value_type>;
@@ -141,15 +161,11 @@ public:
 
   const_iterator cbegin() const noexcept { return const_iterator(this); }
 
-  iterator end() noexcept { return iterator(this, buckets_.size()); }
+  iterator end() noexcept { return iterator(); }
 
-  const_iterator end() const noexcept {
-    return const_iterator(this, buckets_.size());
-  }
+  const_iterator end() const noexcept { return const_iterator(); }
 
-  const_iterator cend() const noexcept {
-    return const_iterator(this, buckets_.size());
-  }
+  const_iterator cend() const noexcept { return const_iterator(); }
 
   // Capacity
   bool empty() const noexcept { return size() == 0; }
@@ -161,7 +177,7 @@ public:
   // Modifiers
   void clear() noexcept {
     for (auto &b : buckets_) {
-      if (b.first != empty_key_) {
+      if (!key_equal()(b.first, empty_key_)) {
         b.first = empty_key_;
       }
     }
@@ -173,7 +189,7 @@ public:
   }
 
   std::pair<iterator, bool> insert(value_type &&value) {
-    return emplace_impl(value.first, std::move(value.second));
+    return emplace_impl(std::move(value.first), std::move(value.second));
   }
 
   template <typename... Args>
@@ -181,7 +197,9 @@ public:
     return emplace_impl(std::forward<Args>(args)...);
   }
 
-  void erase(iterator it) { erase_impl(it); }
+  void erase(iterator it) { erase_at(it); }
+
+  void erase(const_iterator it) { erase_at(it); }
 
   size_type erase(const key_type &key) { return erase_impl(key); }
 
@@ -206,6 +224,10 @@ public:
 
   mapped_type &operator[](const key_type &key) {
     return emplace_impl(key).first->second;
+  }
+
+  mapped_type &operator[](key_type &&key) {
+    return emplace_impl(std::move(key)).first->second;
   }
 
   size_type count(const key_type &key) const { return count_impl(key); }
@@ -249,7 +271,7 @@ public:
 
 private:
   template <typename K, typename... Args>
-  std::pair<iterator, bool> emplace_impl(const K &key, Args &&...args) {
+  std::pair<iterator, bool> emplace_impl(K &&key, Args &&...args) {
     if (key_equal()(empty_key_, key)) [[unlikely]] {
       detail::throw_empty_key();
     }
@@ -257,7 +279,7 @@ private:
     for (size_t idx = key_to_idx(key);; idx = probe_next(idx)) {
       if (key_equal()(buckets_[idx].first, empty_key_)) {
         buckets_[idx].second = mapped_type(std::forward<Args>(args)...);
-        buckets_[idx].first = key;
+        buckets_[idx].first = std::forward<K>(key);
         size_++;
         return {iterator(this, idx), true};
       } else if (key_equal()(buckets_[idx].first, key)) {
@@ -266,7 +288,7 @@ private:
     }
   }
 
-  void erase_impl(iterator it) {
+  void erase_at(const_iterator it) {
     size_t bucket = it.idx_;
     for (size_t idx = probe_next(bucket);; idx = probe_next(idx)) {
       if (key_equal()(buckets_[idx].first, empty_key_)) {
@@ -286,7 +308,7 @@ private:
   template <typename K> size_type erase_impl(const K &key) {
     auto it = find_impl(key);
     if (it != end()) {
-      erase_impl(it);
+      erase_at(it);
       return 1;
     }
     return 0;
