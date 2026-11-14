@@ -20,6 +20,11 @@
 #include <absl/container/flat_hash_map.h>
 #endif
 
+#if defined(HASHMAP_BENCHMARK_HAS_BOOST)
+#include <boost/unordered/unordered_flat_map.hpp>
+#include <boost/unordered_map.hpp>
+#endif
+
 #include <rigtorp/HashMap.h>
 
 #if __has_include(<sys/mman.h>)
@@ -204,6 +209,22 @@ int main(int argc, char *argv[]) {
     hm.reserve(count);
     b("std::unordered_map", hm);
   }
+
+#if defined(HASHMAP_BENCHMARK_HAS_BOOST)
+  if (type == -1 || type == 5) {
+    boost::unordered_flat_map<key, value, hash, std::equal_to<>,
+                              huge_page_allocator<std::pair<const key, value>>>
+        hm;
+    hm.reserve(count);
+    b("boost::unordered_flat_map", hm);
+  }
+
+  if (type == -1 || type == 6) {
+    boost::unordered_map<key, value, hash> hm;
+    hm.reserve(count);
+    b("boost::unordered_map", hm);
+  }
+#endif
 
   return 0;
 }

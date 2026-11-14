@@ -110,10 +110,12 @@ and deleted.
 
 The benchmark uses `std::chrono::steady_clock` and requires no benchmark
 framework or vendored dependencies. CMake enables comparisons against installed
-Abseil and sparsehash when found. Set `HASHMAP_BENCHMARK_WITH_ABSL=OFF` or
-`HASHMAP_BENCHMARK_WITH_SPARSEHASH=OFF` to disable either comparison. Abseil must
-provide its CMake package; sparsehash must provide `google/dense_hash_map`.
-No dependencies are downloaded during configuration.
+Abseil, sparsehash, and Boost.Unordered when found. Set
+`HASHMAP_BENCHMARK_WITH_ABSL=OFF`, `HASHMAP_BENCHMARK_WITH_SPARSEHASH=OFF`, or
+`HASHMAP_BENCHMARK_WITH_BOOST=OFF` to disable any comparison. Abseil must
+provide its CMake package; sparsehash must provide `google/dense_hash_map`;
+Boost must provide `boost/unordered/unordered_flat_map.hpp`. No dependencies are
+downloaded during configuration.
 
 The benchmark is built on Linux and macOS; Windows builds the example and tests.
 All containers in a run use the same hash: hardware CRC32 on x86-64 and
