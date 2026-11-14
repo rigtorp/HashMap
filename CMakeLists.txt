@@ -44,6 +44,13 @@ if(PROJECT_IS_TOP_LEVEL AND BUILD_TESTING)
 
   if(NOT WIN32)
     hashmap_executable(HashMapBenchmark src/HashMapBenchmark.cpp)
+    if(NOT CMAKE_CROSSCOMPILING)
+      include(CheckCXXCompilerFlag)
+      check_cxx_compiler_flag("-march=native" HASHMAP_HAS_MARCH_NATIVE)
+      if(HASHMAP_HAS_MARCH_NATIVE)
+        target_compile_options(HashMapBenchmark PRIVATE -march=native)
+      endif()
+    endif()
 
     option(HASHMAP_BENCHMARK_WITH_ABSL "Use installed Abseil when available" ON)
     if(HASHMAP_BENCHMARK_WITH_ABSL)
