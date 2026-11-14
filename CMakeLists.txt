@@ -11,7 +11,7 @@ project(HashMap
 # -----------------------------------------------------------------------------
 add_library(HashMap INTERFACE)
 add_library(HashMap::HashMap ALIAS HashMap)
-target_compile_features(HashMap INTERFACE cxx_std_14)
+target_compile_features(HashMap INTERFACE cxx_std_20)
 target_sources(HashMap INTERFACE
   FILE_SET HEADERS
   BASE_DIRS include
@@ -44,7 +44,6 @@ if(PROJECT_IS_TOP_LEVEL AND BUILD_TESTING)
 
   if(NOT WIN32)
     hashmap_executable(HashMapBenchmark src/HashMapBenchmark.cpp)
-    target_compile_features(HashMapBenchmark PRIVATE cxx_std_17)
     if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|AMD64|amd64)$")
       target_compile_options(HashMapBenchmark PRIVATE -msse4.2)
     endif()

@@ -78,7 +78,7 @@ The rest of the member functions are implemented as for
 
 ## Build and install
 
-The header-only `HashMap::HashMap` CMake target requires C++14. Configure with
+The header-only `HashMap::HashMap` CMake target requires C++20. Configure with
 CMake 3.24 or newer:
 
 ```sh
