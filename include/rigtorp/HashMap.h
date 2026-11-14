@@ -25,12 +25,31 @@ Disadvantages:
 #pragma once
 
 #include <algorithm>
-#include <cassert>
 #include <cstddef>
 #include <stdexcept>
 #include <vector>
 
 namespace rigtorp {
+
+namespace detail {
+#if defined(_MSC_VER)
+#define RIGTORP_HASHMAP_NOINLINE __declspec(noinline)
+#elif defined(__GNUC__) || defined(__clang__)
+#define RIGTORP_HASHMAP_NOINLINE __attribute__((noinline))
+#else
+#define RIGTORP_HASHMAP_NOINLINE
+#endif
+
+[[noreturn]] RIGTORP_HASHMAP_NOINLINE inline void throw_empty_key() {
+  throw std::invalid_argument("HashMap: empty key cannot be used");
+}
+
+[[noreturn]] RIGTORP_HASHMAP_NOINLINE inline void throw_out_of_range() {
+  throw std::out_of_range("HashMap::at");
+}
+
+#undef RIGTORP_HASHMAP_NOINLINE
+} // namespace detail
 
 template <typename Key, typename T, typename Hash = std::hash<Key>,
           typename KeyEqual = std::equal_to<void>,
@@ -231,7 +250,9 @@ public:
 private:
   template <typename K, typename... Args>
   std::pair<iterator, bool> emplace_impl(const K &key, Args &&...args) {
-    assert(!key_equal()(empty_key_, key) && "empty key shouldn't be used");
+    if (key_equal()(empty_key_, key)) [[unlikely]] {
+      detail::throw_empty_key();
+    }
     reserve(size_ + 1);
     for (size_t idx = key_to_idx(key);; idx = probe_next(idx)) {
       if (key_equal()(buckets_[idx].first, empty_key_)) {
@@ -273,10 +294,10 @@ private:
 
   template <typename K> mapped_type &at_impl(const K &key) {
     iterator it = find_impl(key);
-    if (it != end()) {
+    if (it != end()) [[likely]] {
       return it->second;
     }
-    throw std::out_of_range("HashMap::at");
+    detail::throw_out_of_range();
   }
 
   template <typename K> const mapped_type &at_impl(const K &key) const {
@@ -288,7 +309,9 @@ private:
   }
 
   template <typename K> iterator find_impl(const K &key) {
-    assert(!key_equal()(empty_key_, key) && "empty key shouldn't be used");
+    if (key_equal()(empty_key_, key)) [[unlikely]] {
+      detail::throw_empty_key();
+    }
     for (size_t idx = key_to_idx(key);; idx = probe_next(idx)) {
       if (key_equal()(buckets_[idx].first, key)) {
         return iterator(this, idx);
