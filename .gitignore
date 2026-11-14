@@ -3,3 +3,4 @@
 .vscode/
 build/
 cmake-build-*
+CMakeUserPresets.json
