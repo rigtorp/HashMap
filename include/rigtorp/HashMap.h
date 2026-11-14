@@ -158,7 +158,7 @@ public:
   }
 
   template <typename... Args>
-  std::pair<iterator, bool> emplace(Args &&... args) {
+  std::pair<iterator, bool> emplace(Args &&...args) {
     return emplace_impl(std::forward<Args>(args)...);
   }
 
@@ -230,7 +230,7 @@ public:
 
 private:
   template <typename K, typename... Args>
-  std::pair<iterator, bool> emplace_impl(const K &key, Args &&... args) {
+  std::pair<iterator, bool> emplace_impl(const K &key, Args &&...args) {
     assert(!key_equal()(empty_key_, key) && "empty key shouldn't be used");
     reserve(size_ + 1);
     for (size_t idx = key_to_idx(key);; idx = probe_next(idx)) {
